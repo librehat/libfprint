@@ -80,6 +80,7 @@ void fpi_imgdev_close_complete(struct fp_img_dev *imgdev)
 static int dev_change_state(struct fp_img_dev *imgdev,
 	enum fp_imgdev_state state)
 {
+	g_print("%s CHANGE STATE -> %d \n",G_STRFUNC,state);
 	struct fp_driver *drv = imgdev->dev->drv;
 	struct fp_img_driver *imgdrv = fpi_driver_to_img_driver(drv);
 
@@ -353,6 +354,7 @@ void fpi_imgdev_activate_complete(struct fp_img_dev *imgdev, int status)
 	}
 
 	if (status == 0) {
+		g_print("fpi_imgdev_activate_complete  -- Current state is %d\n",imgdev->action_state);
 		imgdev->action_state = IMG_ACQUIRE_STATE_AWAIT_FINGER_ON;
 		dev_change_state(imgdev, IMGDEV_STATE_AWAIT_FINGER_ON);
 	}
@@ -476,6 +478,7 @@ static int img_dev_identify_start(struct fp_dev *dev)
 
 static int img_dev_capture_start(struct fp_dev *dev)
 {
+	g_print("%s\n",G_STRFUNC);
 	/* Unconditional capture is not supported yet */
 	if (dev->unconditional_capture)
 		return -ENOTSUP;

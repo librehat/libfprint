@@ -304,6 +304,7 @@ static void async_read_encrypted_callback(struct fp_img_dev *idev, int status, v
 	enc_op->encrypted_data_size = vdev->buffer_length;
 
 	if (status == LIBUSB_TRANSFER_COMPLETED &&
+	    enc_op->encrypted_data && enc_op->encrypted_data_size &&
 	    !tls_decrypt(idev, enc_op->encrypted_data,
 			 enc_op->encrypted_data_size,
 			 vdev->buffer, &vdev->buffer_length)) {
@@ -589,6 +590,7 @@ static gboolean tls_decrypt(struct fp_img_dev *idev,
 	gboolean ret = FALSE;
 
 	g_assert(vdev->key_block);
+	g_assert(buffer && buffer_size);
 
 	buffer += 5;
 	*output_len = 0;
@@ -656,10 +658,15 @@ static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 	struct data_exchange_async_data_t *dex_data = data;
 	struct vfs_dev_t *vdev = idev->priv;
 
-	if (status == LIBUSB_TRANSFER_COMPLETED &&
-	    check_data_exchange(vdev, dex_data->dex)) {
-		fpi_ssm_next_state(dex_data->ssm);
-	} else {
+	if (status == LIBUSB_TRANSFER_COMPLETED) {
+		if (check_data_exchange(vdev, dex_data->dex)) {
+		        fpi_ssm_next_state(dex_data->ssm);
+		} else {
+			status = LIBUSB_TRANSFER_ERROR;
+		}
+	}
+
+	if (status != LIBUSB_TRANSFER_COMPLETED) {
 		fp_err("Data exchange failed at state %d", dex_data->ssm->cur_state);
 		fpi_imgdev_session_error(idev, -EIO);
 		fpi_ssm_mark_aborted(dex_data->ssm, status);
@@ -1172,6 +1179,7 @@ static void send_init_sequence(struct fpi_ssm *ssm, int sequence)
 	struct vfs_init_t *vinit = ssm->priv;
 	struct fp_img_dev *idev = vinit->idev;
 
+        g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);
 	do_data_exchange(idev, ssm, &INIT_SEQUENCES[sequence], DATA_EXCHANGE_PLAIN);
 }
 
@@ -1296,8 +1304,6 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 		fp_err("could not claim interface 0");
 		return error;
 	}
-
-	printf("Opening %p\n",idev->udev);
 
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
@@ -1453,7 +1459,8 @@ static void finger_image_download_ssm(struct fpi_ssm *ssm)
 	case IMAGE_DOWNLOAD_STATE_SUBMIT:
 		finger_image_submit(idev, imgdown);
 
-		if (idev->action == IMG_ACTION_VERIFY &&
+		if ((idev->action == IMG_ACTION_VERIFY ||
+		     idev->action == IMG_ACTION_IDENTIFY) &&
 		    idev->action_result != FP_VERIFY_MATCH) {
 			fpi_ssm_jump_to_state(ssm, IMAGE_DOWNLOAD_STATE_RED_LED_BLINK);
 		} else {
@@ -1520,7 +1527,10 @@ static void finger_scan_callback(struct fpi_ssm *ssm)
 	if (ssm->error) {
 		fp_err("Scan failed failed at state %d, unexpected "
 		       "device reply during finger scanning", ssm->cur_state);
-		fpi_imgdev_session_error(idev, ssm->error);
+
+		fpi_imgdev_abort_scan(idev, ssm->error);
+		fpi_imgdev_report_finger_status(idev, FALSE);
+		// fpi_imgdev_session_error(idev, ssm->error);
 	}
 
 	vdev->buffer_length = 0;
@@ -1590,13 +1600,12 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 		}
 
 	case SCAN_STATE_SUCCESS:
-		printf("IMAGE SCANNED FINE! NEED TO PARSE IT!\n");
 		fpi_ssm_mark_completed(ssm);
 
 		break;
 
 	case SCAN_STATE_HANDLE_SCAN_ERROR:
-		fpi_imgdev_abort_scan(idev, ssm->error);
+		// fpi_imgdev_abort_scan(idev, ssm->error);
 		fpi_ssm_jump_to_state(ssm, SCAN_STATE_DO_LED_RED_BLINK);
 		break;
 
@@ -1609,7 +1618,6 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 
 	case SCAN_STATE_AFTER_RED_BLINK:
 		fpi_ssm_mark_aborted(ssm, ssm->error);
-		fpi_imgdev_report_finger_status(idev, FALSE);
 
 		/* We could actually retrying again by going back to
 		 * ACTIVATE_STATE_SEQ_1, that would need to split the
@@ -1642,6 +1650,7 @@ static void send_activate_sequence(struct fpi_ssm *ssm, int sequence)
 {
 	struct fp_img_dev *idev = ssm->priv;
 
+        g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);
 	do_data_exchange(idev, ssm, &ACTIVATE_SEQUENCES[sequence], DATA_EXCHANGE_ENCRYPTED);
 }
 
@@ -1683,7 +1692,6 @@ static void activate_ssm(struct fpi_ssm *ssm)
 	case ACTIVATE_STATE_SEQ_6:
 	case ACTIVATE_STATE_SEQ_7:
 	case ACTIVATE_STATE_SCAN_MATRIX:
-		printf("Activate State %d\n",ssm->cur_state);
 		send_activate_sequence(ssm, ssm->cur_state - ACTIVATE_STATE_SEQ_1);
 		break;
 
@@ -1761,7 +1769,8 @@ static int dev_change_state(struct fp_img_dev *idev, enum fp_imgdev_state state)
 
 static void send_deactivate_sequence(struct fpi_ssm *ssm, int sequence)
 {
-	struct fp_img_dev *idev = ssm->priv;
+	
+	        g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);struct fp_img_dev *idev = ssm->priv;
 	do_data_exchange(idev, ssm, &DEACTIVATE_SEQUENCES[sequence], DATA_EXCHANGE_ENCRYPTED);
 }
 
@@ -1787,9 +1796,11 @@ static void dev_deactivate_callback(struct fpi_ssm *ssm)
 	struct fp_img_dev *idev = ssm->priv;
 	struct vfs_dev_t *vdev = idev->priv;
 
+	g_print("Deactivate! err: %d\n",ssm->error);
+
 	if (ssm->error) {
-		fp_err("Deactivation failed failed at state %d, unexpected"
-		       "device reply during initialization", ssm->cur_state);
+		fp_err("Deactivation failed failed at state %d, unexpected "
+		       "device reply during deactivation", ssm->cur_state);
 		fpi_imgdev_session_error(idev, ssm->error);
 	}
 

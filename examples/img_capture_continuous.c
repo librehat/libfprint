@@ -82,6 +82,7 @@ static void display_frame(struct fp_img *img)
 			framebuffer, width, height);
 	XvPutImage(display, info[adaptor].base_id, window, gc, xv_image,
 			0, 0, width, height, 0, 0, width, height);
+	XFree(xv_image);
 }
 
 static void QueryXv()
@@ -211,13 +212,16 @@ int main(void)
 	while (1) { /* event loop */
 		struct fp_img *img;
 
-		r = fp_dev_img_capture(dev, 1, &img);
+		r = fp_dev_img_capture(dev, 0, &img);
 		if (r) {
 			fprintf(stderr, "image capture failed, code %d\n", r);
 			goto out_close;
 		}
-		if (standardize)
+		// if (standardize)
 			fp_img_standardize(img);
+		
+		  int minutiae_num;
+			struct fp_minutia ** minutiae = fp_img_get_minutiae(img, &minutiae_num);
 
 		display_frame(img);
 		fp_img_free(img);
@@ -237,6 +241,7 @@ int main(void)
 			case XK_s:
 			case XK_S:
 				standardize = !standardize;
+			  printf("Standardized mode toggled: %s", standardize ? "True" : "False");
 				break;
 			}
 		} /* XPending */

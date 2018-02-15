@@ -211,6 +211,14 @@ API_EXPORTED int fp_enroll_finger_img(struct fp_dev *dev,
 	/* FIXME this isn't very clean */
 	edata = dev->enroll_stage_cb_data;
 
+	// if (stage != 0) {
+	// 	r = fp_async_enroll_start(dev, sync_enroll_cb, edata);
+	// 	if (r < 0) {
+	// 		g_free(edata);
+	// 		return r;
+	// 	}
+	// }
+
 	while (!edata->populated) {
 		r = fp_handle_events();
 		if (r < 0) {

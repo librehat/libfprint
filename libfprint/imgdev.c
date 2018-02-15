@@ -83,6 +83,7 @@ void fpi_imgdev_close_complete(struct fp_img_dev *imgdev)
 static int dev_change_state(struct fp_img_dev *imgdev,
 	enum fp_imgdev_state state)
 {
+	// g_print("%s CHANGE STATE -> %d \n",G_STRFUNC,state);
 	struct fp_driver *drv = imgdev->dev->drv;
 	struct fp_img_driver *imgdrv = fpi_driver_to_img_driver(drv);
 
@@ -344,6 +345,7 @@ void fpi_imgdev_activate_complete(struct fp_img_dev *imgdev, int status)
 {
 	struct fp_img_driver *imgdrv = fpi_driver_to_img_driver(imgdev->dev->drv);
 
+	g_print("%s\n",G_STRFUNC);
 	fp_dbg("status %d", status);
 
 	switch (imgdev->action) {
@@ -368,6 +370,7 @@ void fpi_imgdev_activate_complete(struct fp_img_dev *imgdev, int status)
 	}
 
 	if (status == 0) {
+		g_print("fpi_imgdev_activate_complete  -- Current state is %d\n",imgdev->action_state);
 		imgdev->action_state = IMG_ACQUIRE_STATE_AWAIT_FINGER_ON;
 		dev_change_state(imgdev, IMGDEV_STATE_AWAIT_FINGER_ON);
 	}
@@ -434,6 +437,7 @@ int fpi_imgdev_get_img_height(struct fp_img_dev *imgdev)
 
 static int dev_activate(struct fp_img_dev *imgdev, enum fp_imgdev_state state)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_driver *drv = imgdev->dev->drv;
 	struct fp_img_driver *imgdrv = fpi_driver_to_img_driver(drv);
 
@@ -444,6 +448,7 @@ static int dev_activate(struct fp_img_dev *imgdev, enum fp_imgdev_state state)
 
 static void dev_deactivate(struct fp_img_dev *imgdev)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_driver *drv = imgdev->dev->drv;
 	struct fp_img_driver *imgdrv = fpi_driver_to_img_driver(drv);
 
@@ -454,6 +459,7 @@ static void dev_deactivate(struct fp_img_dev *imgdev)
 
 static int generic_acquire_start(struct fp_dev *dev, int action)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_img_dev *imgdev = dev->priv;
 	int r;
 	fp_dbg("action %d", action);
@@ -485,6 +491,7 @@ static void generic_acquire_stop(struct fp_img_dev *imgdev)
 
 static int img_dev_enroll_start(struct fp_dev *dev)
 {
+	g_print("%s\n",G_STRFUNC);
 	return generic_acquire_start(dev, IMG_ACTION_ENROLL);
 }
 

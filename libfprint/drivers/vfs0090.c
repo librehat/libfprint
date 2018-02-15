@@ -39,12 +39,18 @@
 
 /* The main driver structure */
 struct vfs_dev_t {
+	/* One if we were asked to read fingerprint, zero otherwise */
+	gboolean active;
 
 	/* Buffer for saving usb data through states */
+	// Use GByteArray
 	unsigned char *buffer;
 	unsigned int buffer_length;
 
 	unsigned char key_block[0x120];
+
+	// /* For dev_deactivate to check whether ssm still running or not */
+	// gboolean ssm_active;
 
 	/* Current async transfer */
 	struct libusb_transfer *transfer;
@@ -124,6 +130,7 @@ struct async_usb_operation_data_t {
 	async_operation_cb callback;
 	void *callback_data;
 
+	/* this can be removed now!?! */
 	gboolean completed;
 };
 
@@ -1315,10 +1322,13 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
-	usb_operation(libusb_reset_device(idev->udev), idev);
-	usb_operation(libusb_set_configuration(idev->udev, 1), idev);
-	usb_operation(libusb_claim_interface(idev->udev, 0), idev);
+	// usb_operation(libusb_reset_device(idev->udev), idev);
+	// usb_operation(libusb_set_configuration(idev->udev, 1), idev);
+	// usb_operation(libusb_claim_interface(idev->udev, 0), idev);
 
+	libusb_reset_device(idev->udev);
+	libusb_set_configuration(idev->udev, 1);
+	libusb_claim_interface(idev->udev, 0);
 
 	/* Clearing previous device state */
 	ssm = fpi_ssm_new(idev->dev, init_ssm, INIT_STATE_LAST);
@@ -1586,6 +1596,7 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 			break;
 		} else if (idev->action == IMG_ACTION_VERIFY) {
 			fp_warn("Low quality image in verification, might fail");
+		// 	fpi_imgdev_abort_scan(idev, FP_VERIFY_RETRY_CENTER_FINGER);
 		}
 
 	case SCAN_STATE_SUCCESS:

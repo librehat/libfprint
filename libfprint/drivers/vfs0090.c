@@ -1297,8 +1297,6 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 		return error;
 	}
 
-	printf("Opening %p\n",idev->udev);
-
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
 		fp_err("could not initialise NSS");
@@ -1590,7 +1588,6 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 		}
 
 	case SCAN_STATE_SUCCESS:
-		printf("IMAGE SCANNED FINE! NEED TO PARSE IT!\n");
 		fpi_ssm_mark_completed(ssm);
 
 		break;
@@ -1683,7 +1680,6 @@ static void activate_ssm(struct fpi_ssm *ssm)
 	case ACTIVATE_STATE_SEQ_6:
 	case ACTIVATE_STATE_SEQ_7:
 	case ACTIVATE_STATE_SCAN_MATRIX:
-		printf("Activate State %d\n",ssm->cur_state);
 		send_activate_sequence(ssm, ssm->cur_state - ACTIVATE_STATE_SEQ_1);
 		break;
 
@@ -1788,8 +1784,8 @@ static void dev_deactivate_callback(struct fpi_ssm *ssm)
 	struct vfs_dev_t *vdev = idev->priv;
 
 	if (ssm->error) {
-		fp_err("Deactivation failed failed at state %d, unexpected"
-		       "device reply during initialization", ssm->cur_state);
+		fp_err("Deactivation failed failed at state %d, unexpected "
+		       "device reply during deactivation", ssm->cur_state);
 		fpi_imgdev_session_error(idev, ssm->error);
 	}
 

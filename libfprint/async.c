@@ -45,11 +45,14 @@ API_EXPORTED int fp_async_dev_open(struct fp_dscv_dev *ddev, fp_dev_open_cb cb,
 	int r;
 
 	fp_dbg("");
+	g_print("LIBUSB OPEN....\n");
 	r = libusb_open(ddev->udev, &udevh);
 	if (r < 0) {
 		fp_err("usb_open failed, error %d", r);
 		return r;
 	}
+
+	g_print("...OK OPENED\n");
 
 	dev = g_malloc0(sizeof(*dev));
 	dev->drv = drv;

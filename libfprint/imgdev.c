@@ -162,6 +162,7 @@ void fpi_imgdev_report_finger_status(struct fp_img_dev *imgdev,
 		if (imgdev->action == IMG_ACTION_ENROLL &&
 		    r > 0 && r != FP_ENROLL_COMPLETE && r != FP_ENROLL_FAIL) {
 			imgdev->action_result = 0;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 
 			if (imgdrv->flags & FP_IMGDRV_NEEDS_REACTIVATION_BETWEEN_ENROLLS) {
 				imgdev->action_state = IMG_ACQUIRE_STATE_DEACTIVATING;
@@ -175,17 +176,20 @@ void fpi_imgdev_report_finger_status(struct fp_img_dev *imgdev,
 	case IMG_ACTION_VERIFY:
 		fpi_drvcb_report_verify_result(imgdev->dev, r, img);
 		imgdev->action_result = 0;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 		fp_print_data_free(data);
 		break;
 	case IMG_ACTION_IDENTIFY:
 		fpi_drvcb_report_identify_result(imgdev->dev, r,
 			imgdev->identify_match_offset, img);
 		imgdev->action_result = 0;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 		fp_print_data_free(data);
 		break;
 	case IMG_ACTION_CAPTURE:
 		fpi_drvcb_report_capture_result(imgdev->dev, r, img);
 		imgdev->action_result = 0;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 		break;
 	default:
 		fp_err("unhandled action %d", imgdev->action);
@@ -211,6 +215,7 @@ static void verify_process_img(struct fp_img_dev *imgdev)
 		r = FP_VERIFY_NO_MATCH;
 
 	imgdev->action_result = r;
+	g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 }
 
 static void identify_process_img(struct fp_img_dev *imgdev)
@@ -227,12 +232,14 @@ static void identify_process_img(struct fp_img_dev *imgdev)
 		imgdev->dev->identify_gallery, match_score, &match_offset);
 
 	imgdev->action_result = r;
+	g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 	imgdev->identify_match_offset = match_offset;
 }
 
 void fpi_imgdev_abort_scan(struct fp_img_dev *imgdev, int result)
 {
 	imgdev->action_result = result;
+	g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 	imgdev->action_state = IMG_ACQUIRE_STATE_AWAIT_FINGER_OFF;
 	dev_change_state(imgdev, IMGDEV_STATE_AWAIT_FINGER_OFF);
 }
@@ -256,6 +263,7 @@ void fpi_imgdev_image_captured(struct fp_img_dev *imgdev, struct fp_img *img)
 	r = sanitize_image(imgdev, &img);
 	if (r < 0) {
 		imgdev->action_result = r;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 		fp_img_free(img);
 		goto next_state;
 	}
@@ -267,6 +275,7 @@ void fpi_imgdev_image_captured(struct fp_img_dev *imgdev, struct fp_img *img)
 		if (r < 0) {
 			fp_dbg("image to print data conversion error: %d", r);
 			imgdev->action_result = FP_ENROLL_RETRY;
+			g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 			goto next_state;
 		} else if (img->minutiae->num < MIN_ACCEPTABLE_MINUTIAE) {
 			fp_dbg("not enough minutiae, %d/%d", img->minutiae->num,
@@ -274,6 +283,7 @@ void fpi_imgdev_image_captured(struct fp_img_dev *imgdev, struct fp_img *img)
 			fp_print_data_free(print);
 			/* depends on FP_ENROLL_RETRY == FP_VERIFY_RETRY */
 			imgdev->action_result = FP_ENROLL_RETRY;
+			g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 			goto next_state;
 		}
 	}
@@ -293,10 +303,14 @@ void fpi_imgdev_image_captured(struct fp_img_dev *imgdev, struct fp_img *img)
 		fp_print_data_free(imgdev->acquire_data);
 		imgdev->acquire_data = NULL;
 		imgdev->enroll_stage++;
-		if (imgdev->enroll_stage == imgdev->dev->nr_enroll_stages)
+		if (imgdev->enroll_stage == imgdev->dev->nr_enroll_stages) {
 			imgdev->action_result = FP_ENROLL_COMPLETE;
-		else
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
+		}
+		else {
 			imgdev->action_result = FP_ENROLL_PASS;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
+		}
 		break;
 	case IMG_ACTION_VERIFY:
 		verify_process_img(imgdev);
@@ -306,6 +320,7 @@ void fpi_imgdev_image_captured(struct fp_img_dev *imgdev, struct fp_img *img)
 		break;
 	case IMG_ACTION_CAPTURE:
 		imgdev->action_result = FP_CAPTURE_COMPLETE;
+		g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 		break;
 	default:
 		BUG();
@@ -481,6 +496,7 @@ static void generic_acquire_stop(struct fp_img_dev *imgdev)
 	imgdev->enroll_data = NULL;
 	imgdev->acquire_img = NULL;
 	imgdev->action_result = 0;
+	g_print("%s, action result set to %d\n",G_STRFUNC,imgdev->action_result);
 }
 
 static int img_dev_enroll_start(struct fp_dev *dev)

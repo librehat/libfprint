@@ -177,6 +177,8 @@ static void async_write_callback(struct libusb_transfer *transfer)
 	struct fp_img_dev *idev = op_data->idev;
 	struct vfs_dev_t *vdev = idev->priv;
 
+	g_print("%s, result %d\n",G_STRFUNC,transfer->status);
+
 	op_data->completed = TRUE;
 
 	if (transfer->status == LIBUSB_TRANSFER_CANCELLED || !vdev->transfer) {
@@ -212,6 +214,8 @@ static void async_write_to_usb(struct fp_img_dev *idev,
 {
 	struct async_usb_operation_data_t *op_data;
 	struct vfs_dev_t *vdev = idev->priv;
+
+	g_print("%s\n",G_STRFUNC);
 
 	g_assert(async_transfer_completed(idev));
 
@@ -276,6 +280,8 @@ static void async_read_from_usb(struct fp_img_dev *idev, int read_mode,
 	op_data->idev = idev;
 	op_data->callback = callback;
 	op_data->callback_data = callback_data;
+
+	g_print("%s, result\n",G_STRFUNC);
 
 	switch (read_mode) {
 	case VFS_READ_INTERRUPT:
@@ -718,6 +724,8 @@ static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 	struct data_exchange_async_data_t *dex_data = data;
 	struct vfs_dev_t *vdev = idev->priv;
 
+	g_print("%s, result %d\n",G_STRFUNC,status);
+
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		if (check_data_exchange_dbg(vdev, dex_data->dex)) {
 			fpi_ssm_next_state(dex_data->ssm);
@@ -738,6 +746,7 @@ static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 
 static void do_data_exchange(struct fp_img_dev *idev, struct fpi_ssm *ssm, const struct data_exchange_t *dex, int mode)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct vfs_dev_t *vdev = idev->priv;
 	struct data_exchange_async_data_t *dex_data;
 
@@ -1232,6 +1241,7 @@ static void send_init_sequence(struct fpi_ssm *ssm, int sequence)
 {
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 
+	g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);
 	do_data_exchange(idev, ssm, &INIT_SEQUENCES[sequence], DATA_EXCHANGE_PLAIN);
 }
 
@@ -1366,6 +1376,8 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	SECStatus secs_status;
 	int usb_config;
 
+	g_print("%s, %s\n", G_STRFUNC, G_STRLOC);
+
 	/* Claim usb interface */
 	int error = libusb_claim_interface(idev->udev, 0);
 	if (error < 0) {
@@ -1373,6 +1385,8 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 		fp_err("could not claim interface 0");
 		return error;
 	}
+
+	g_print("%s, %s\n", G_STRFUNC, G_STRLOC);
 
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
@@ -1603,6 +1617,7 @@ static void finger_scan_callback(struct fpi_ssm *ssm)
 
 static void finger_scan_interrupt_callback(struct fp_img_dev *idev, int status, void *data)
 {
+	g_print("%s, status %d\n",G_STRFUNC,status);
 	struct vfs_dev_t *vdev = idev->priv;
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
@@ -1726,6 +1741,7 @@ static void send_activate_sequence(struct fpi_ssm *ssm, int sequence)
 {
 	struct fp_img_dev *idev = ssm->priv;
 
+	g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);
 	do_data_exchange(idev, ssm, &ACTIVATE_SEQUENCES[sequence], DATA_EXCHANGE_ENCRYPTED);
 }
 
@@ -1734,6 +1750,8 @@ static void activate_device_interrupt_callback(struct fp_img_dev *idev, int stat
 	struct vfs_dev_t *vdev = idev->priv;
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
+
+	print_hex(vdev->buffer, vdev->buffer_length);
 
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		interrupt_type = translate_interrupt(vdev->buffer,
@@ -1855,12 +1873,14 @@ static int dev_change_state(struct fp_img_dev *idev, enum fp_imgdev_state state)
 
 static void send_deactivate_sequence(struct fpi_ssm *ssm, int sequence)
 {
+	g_print("%s, %p, %d\n", G_STRFUNC, ssm, sequence);
 	struct fp_img_dev *idev = ssm->priv;
 	do_data_exchange(idev, ssm, &DEACTIVATE_SEQUENCES[sequence], DATA_EXCHANGE_ENCRYPTED);
 }
 
 static void deactivate_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s: %d\n",G_STRFUNC, ssm->cur_state);
 	struct fp_img_dev *idev = ssm->priv;
 	struct vfs_dev_t *vdev = idev->priv;
 
@@ -1894,6 +1914,11 @@ static void dev_deactivate_callback(struct fpi_ssm *ssm)
 {
 	struct fp_img_dev *idev = ssm->priv;
 	struct vfs_dev_t *vdev = idev->priv;
+
+	g_print("dev_deactivate_callback\n");
+
+	g_print("Deactivate! err: %d\n",ssm->error);
+	// idev->action_result = 0;
 
 	if (ssm->error) {
 		fp_err("Deactivation failed failed at state %d, unexpected "

@@ -121,6 +121,7 @@ void print_hex(unsigned char *data, int len) {
 }
 
 /* remove emmmeeme */
+static void start_reactivate_subsm(struct fpi_ssm *parent_ssm);
 
 static unsigned char *tls_encrypt(struct fp_img_dev *idev,
 				  const unsigned char *data, int data_size,
@@ -141,6 +142,9 @@ struct async_usb_operation_data_t {
 
 static int usb_error_to_fprint_fail(struct fp_img_dev *idev, int status)
 {
+	if (status == LIBUSB_TRANSFER_CANCELLED)
+		return status;
+
 	switch (idev->action) {
 	case IMG_ACTION_ENROLL:
 		status = FP_ENROLL_FAIL;
@@ -179,7 +183,8 @@ static void async_write_callback(struct libusb_transfer *transfer)
 
 	op_data->completed = TRUE;
 
-	if (transfer->status == LIBUSB_TRANSFER_CANCELLED || !vdev->transfer) {
+	if (transfer->status == LIBUSB_TRANSFER_CANCELLED) {
+		// transfer->status = LIBUSB_TRANSFER_CANCELLED;
 		fp_dbg("USB write transfer cancelled");
 		goto out;
 	}
@@ -199,6 +204,7 @@ static void async_write_callback(struct libusb_transfer *transfer)
 
 out:
 	vdev->transfer = NULL;
+	g_print("Resetting transfer %s\n",G_STRFUNC);
 
 	if (op_data->callback)
 		op_data->callback(idev, transfer->status, op_data->callback_data);
@@ -216,6 +222,7 @@ static void async_write_to_usb(struct fp_img_dev *idev,
 	g_assert(async_transfer_completed(idev));
 
 	vdev->transfer = libusb_alloc_transfer(0);
+	g_print("setting transfer %s\n",G_STRFUNC);
 	vdev->transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
 
 	op_data = g_new0(struct async_usb_operation_data_t, 1);
@@ -237,7 +244,8 @@ static void async_read_callback(struct libusb_transfer *transfer)
 
 	vdev->buffer_length = 0;
 
-	if (transfer->status == LIBUSB_TRANSFER_CANCELLED || !vdev->transfer) {
+	if (transfer->status == LIBUSB_TRANSFER_CANCELLED) {
+		// transfer->status = LIBUSB_TRANSFER_CANCELLED;
 		fp_dbg("USB read transfer cancelled");
 		goto out;
 	}
@@ -253,6 +261,7 @@ static void async_read_callback(struct libusb_transfer *transfer)
 
 out:
 	vdev->transfer = NULL;
+	g_print("Resetting transfer %s\n",G_STRFUNC);
 
 	if (op_data->callback)
 		op_data->callback(idev, transfer->status, op_data->callback_data);
@@ -270,6 +279,7 @@ static void async_read_from_usb(struct fp_img_dev *idev, int read_mode,
 	g_assert(async_transfer_completed(idev));
 
 	vdev->transfer = libusb_alloc_transfer(0);
+	g_print("setting transfer %s\n",G_STRFUNC);
 	vdev->transfer->flags |= LIBUSB_TRANSFER_FREE_TRANSFER;
 
 	op_data = g_new0(struct async_usb_operation_data_t, 1);
@@ -347,7 +357,6 @@ static void async_read_encrypted_callback(struct fp_img_dev *idev, int status, v
 	enc_op->encrypted_data_size = vdev->buffer_length;
 
 	if (status == LIBUSB_TRANSFER_COMPLETED &&
-	    enc_op->encrypted_data && enc_op->encrypted_data_size &&
 	    !tls_decrypt(idev, enc_op->encrypted_data,
 			 enc_op->encrypted_data_size,
 			 vdev->buffer, &vdev->buffer_length)) {
@@ -439,6 +448,7 @@ static void async_transfer_callback_with_ssm(struct fp_img_dev *idev,
 					     int status, void *data)
 {
 	struct fpi_ssm *ssm = data;
+	g_print("async_transfer_callback_with_ssm\n");
 
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		fpi_ssm_next_state(ssm);
@@ -635,8 +645,9 @@ static gboolean tls_decrypt(struct fp_img_dev *idev,
 	int tlen1 = 0, tlen2;
 	gboolean ret = FALSE;
 
+	g_return_val_if_fail(buffer != NULL, FALSE);
+	g_return_val_if_fail(buffer_size > 0, FALSE);
 	g_assert(vdev->key_block);
-	g_assert(buffer && buffer_size);
 
 	buffer += 5;
 	*output_len = 0;
@@ -731,7 +742,9 @@ static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 	if (status != LIBUSB_TRANSFER_COMPLETED) {
 		fp_err("Data exchange failed at state %d, usb error: %s",
 			dex_data->ssm->cur_state, libusb_error_name(status));
-		fpi_imgdev_session_error(idev, -EIO);
+		if (status != LIBUSB_TRANSFER_CANCELLED)
+			fpi_imgdev_session_error(idev, -EIO);
+
 		fpi_ssm_mark_aborted(dex_data->ssm, status);
 	}
 
@@ -945,6 +958,7 @@ struct tls_handshake_t {
 
 static void handshake_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct tls_handshake_t *tlshd = ssm->priv;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
@@ -1170,6 +1184,50 @@ static int translate_interrupt(unsigned char *interrupt, int interrupt_size)
 	const unsigned char scan_failed_too_short2_interrupt[] = { 0x03, 0x61, 0x07, 0x00, 0x41 };
 	const unsigned char scan_failed_too_fast_interrupt[] = { 0x03, 0x20, 0x07, 0x00, 0x00 };
 
+	// unknown 0x00, 0x00, 0x88 0x02 0x00
+	/*
+	async:debug [fp_async_enroll_start] starting enrollment
+fp:debug [generic_acquire_start] action 1
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 0
+activate_ssm 0
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 1
+activate_ssm 1
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 2
+activate_ssm 2
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 3
+activate_ssm 3
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 4
+activate_ssm 4
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 5
+activate_ssm 5
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 6
+activate_ssm 6
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 7
+activate_ssm 7
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 8
+activate_ssm 8
+drv:debug [__ssm_call_handler] 0x9639e0 entering state 9
+activate_ssm 9
+vfs0090:error [translate_interrupt] Interrupt not tracked, please report!
+0000 00 00 88 02 00                                    | .....
+drv:error [fpi_ssm_jump_to_state] BUG at drv.c:167
+drv:debug [__ssm_call_handler] 0x99dd10 entering state 100
+finger_scan_ssm 100
+vfs0090:error [finger_scan_ssm] Unknown scan state
+fp:debug [fpi_imgdev_session_error] error -5
+async:error [fpi_drvcb_enroll_stage_completed] BUG at async.c:161
+async:debug [fpi_drvcb_enroll_stage_completed] result -5
+async:debug [fp_async_enroll_stop] 
+drv:debug [__ssm_call_handler] 0x97d860 entering state 0
+deactivate_ssm 0
+drv:debug [__ssm_call_handler] 0x97d860 entering state 1
+deactivate_ssm 1
+
+
+ e8 b2 ec f1 ff
+
+	*/
+
 	if (sizeof(waiting_finger) == interrupt_size &&
 		memcmp(waiting_finger, interrupt, interrupt_size) == 0) {
 		fp_info("Waiting for finger...");
@@ -1240,6 +1298,7 @@ static void send_init_sequence(struct fpi_ssm *ssm, int sequence)
 /* Main SSM loop */
 static void init_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct vfs_init_t *vinit = ssm->priv;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
@@ -1342,6 +1401,7 @@ static void init_ssm(struct fpi_ssm *ssm)
 /* Callback for dev_open ssm */
 static void dev_open_callback(struct fpi_ssm *ssm)
 {
+	g_print("%s\n",G_STRFUNC);
 	/* Notify open complete */
 	struct vfs_init_t *vinit = ssm->priv;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
@@ -1367,14 +1427,6 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	struct vfs_dev_t *vdev;
 	SECStatus secs_status;
 	int usb_config;
-
-	/* Claim usb interface */
-	int error = libusb_claim_interface(idev->udev, 0);
-	if (error < 0) {
-		/* Interface not claimed, return error */
-		fp_err("could not claim interface 0");
-		return error;
-	}
 
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
@@ -1413,13 +1465,14 @@ static void led_blink_callback_with_ssm(struct fp_img_dev *idev, int status, voi
 	struct fpi_ssm *ssm = data;
 	struct vfs_dev_t *vdev = idev->priv;
 
-	if (status != LIBUSB_TRANSFER_COMPLETED) {
+	if (status == LIBUSB_TRANSFER_COMPLETED) {
+		vdev->timeout =
+			fpi_timeout_add(200, timeout_fpi_ssm_next_state, ssm);
+	} else {
 		/* NO need to fail here, it's not a big issue... */
 		fp_err("LED blinking failed with error %d", status);
+		fpi_ssm_next_state(ssm);
 	}
-
-	vdev->timeout =
-		fpi_timeout_add(500, timeout_fpi_ssm_next_state, ssm);
 }
 
 struct image_download_t {
@@ -1431,20 +1484,18 @@ struct image_download_t {
 
 static void finger_image_download_callback(struct fpi_ssm *ssm)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct image_download_t *imgdown = ssm->priv;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
-	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
-	vdev->buffer_length = 0;
-	g_clear_pointer(&vdev->buffer, g_free);
-
-	if (ssm->error) {
+	if (!ssm->error) {
+		fpi_ssm_mark_completed(ssm->parentsm);
+	} else {
 		fp_err("Scan failed failed at state %d, unexpected"
-		       "device reply during initialization", ssm->cur_state);
+		       "device reply during image download", ssm->cur_state);
 		fpi_imgdev_session_error(idev, ssm->error);
+		fpi_ssm_mark_aborted(ssm->parentsm, ssm->error);
 	}
-
-	fpi_imgdev_report_finger_status(idev, FALSE);
 
 	g_free(imgdown);
 	fpi_ssm_free(ssm);
@@ -1484,7 +1535,9 @@ static void finger_image_download_read_callback(struct fp_img_dev *idev, int sta
 
 	if (status != LIBUSB_TRANSFER_COMPLETED) {
 		fp_err("Image download failed at state %d", ssm->cur_state);
-		fpi_imgdev_session_error(idev, -EIO);
+		if (status != LIBUSB_TRANSFER_CANCELLED)
+			fpi_imgdev_session_error(idev, -EIO);
+
 		fpi_ssm_mark_aborted(ssm, status);
 		return;
 	}
@@ -1497,6 +1550,7 @@ static void finger_image_download_read_callback(struct fp_img_dev *idev, int sta
 
 static void finger_image_download_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct image_download_t *imgdown = ssm->priv;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
@@ -1552,7 +1606,19 @@ static void finger_image_download_ssm(struct fpi_ssm *ssm)
 
 	case IMAGE_DOWNLOAD_STATE_AFTER_GREEN_LED_BLINK:
 	case IMAGE_DOWNLOAD_STATE_AFTER_RED_LED_BLINK:
-		fpi_ssm_mark_completed(ssm);
+		fpi_ssm_jump_to_state(ssm, IMAGE_DOWNLOAD_STATE_SUBMIT_RESULT);
+		break;
+
+	case IMAGE_DOWNLOAD_STATE_SUBMIT_RESULT:
+		if (idev->action == IMG_ACTION_ENROLL &&
+		    idev->action_result != FP_ENROLL_COMPLETE) {
+			g_print("REACTIVATING!\n");
+			start_reactivate_subsm(ssm);
+		} else {
+			fpi_ssm_mark_completed(ssm);
+		}
+
+		fpi_imgdev_report_finger_status(idev, FALSE);
 		break;
 
 	default:
@@ -1562,23 +1628,23 @@ static void finger_image_download_ssm(struct fpi_ssm *ssm)
 	}
 }
 
-static void start_finger_image_download(struct fp_img_dev *idev)
+static void start_finger_image_download_subsm(struct fpi_ssm *parent_ssm)
 {
-	struct vfs_dev_t *vdev = idev->priv;
 	struct fpi_ssm *ssm;
-
-	vdev->buffer = g_malloc(VFS_IMAGE_SIZE * VFS_IMAGE_SIZE);
-	vdev->buffer_length = 0;
+	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(parent_ssm);
 
 	ssm = fpi_ssm_new(idev->dev, finger_image_download_ssm,
 			  IMAGE_DOWNLOAD_STATE_LAST);
 
 	ssm->priv = g_new0(struct image_download_t, 1);
+	ssm->parentsm = parent_ssm;
+
 	fpi_ssm_start(ssm, finger_image_download_callback);
 }
 
 static void finger_scan_callback(struct fpi_ssm *ssm)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1597,9 +1663,6 @@ static void finger_scan_callback(struct fpi_ssm *ssm)
 	vdev->buffer_length = 0;
 	g_clear_pointer(&vdev->buffer, g_free);
 
-	if (!ssm->error)
-		start_finger_image_download(idev);
-
 	fpi_ssm_free(ssm);
 }
 
@@ -1608,21 +1671,23 @@ static void finger_scan_interrupt_callback(struct fp_img_dev *idev, int status, 
 	struct vfs_dev_t *vdev = idev->priv;
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
+	g_print("finger_scan_interrupt_callback\n");
+	print_hex(vdev->buffer, vdev->buffer_length);
 
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		interrupt_type = translate_interrupt(vdev->buffer,
 						     vdev->buffer_length);
 		fpi_ssm_jump_to_state(ssm, interrupt_type);
+	} else if (status == LIBUSB_TRANSFER_CANCELLED) {
+		fpi_ssm_mark_completed(ssm);
 	} else {
 		fpi_ssm_mark_aborted(ssm, usb_error_to_fprint_fail(idev, status));
 	}
 }
 
-static void activate_ssm(struct fpi_ssm *ssm);
-
 static void finger_scan_ssm(struct fpi_ssm *ssm)
 {
-	struct fpi_ssm *reactivate_ssm;
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1631,6 +1696,7 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 		fpi_imgdev_report_finger_status(idev, TRUE);
 
 	case SCAN_STATE_WAITING_FOR_FINGER:
+		// break;
 	case SCAN_STATE_IN_PROGRESS:
 	case SCAN_STATE_COMPLETED:
 		async_read_from_usb(idev, VFS_READ_INTERRUPT,
@@ -1669,7 +1735,8 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 		}
 
 	case SCAN_STATE_SUCCESS:
-		fpi_ssm_mark_completed(ssm);
+		start_finger_image_download_subsm(ssm);
+		// fpi_ssm_mark_completed(ssm);
 
 		break;
 
@@ -1685,17 +1752,12 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 		break;
 
 	case SCAN_STATE_REACTIVATE_REQUEST:
-		vdev->timeout =
-			fpi_timeout_add(100, timeout_fpi_ssm_next_state, ssm);
+		start_reactivate_subsm(ssm);
 
-		fpi_imgdev_abort_scan(idev, ssm->error);
+		if (ssm->error)
+			fpi_imgdev_abort_scan(idev, ssm->error);
+
 		fpi_imgdev_report_finger_status(idev, FALSE);
-		break;
-
-	case SCAN_STATE_REACTIVATE:
-		reactivate_ssm = fpi_ssm_new(idev->dev, activate_ssm, ACTIVATE_STATE_LAST);
-		fpi_ssm_start_subsm(ssm, reactivate_ssm);
-
 		break;
 
 	case SCAN_STATE_REACTIVATION_DONE:
@@ -1718,6 +1780,7 @@ static void start_finger_scan(struct fp_img_dev *idev)
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
+	g_print("start_finger_scan\n");
 	ssm = fpi_ssm_new(idev->dev, finger_scan_ssm, SCAN_STATE_LAST);
 	fpi_ssm_start(ssm, finger_scan_callback);
 }
@@ -1735,12 +1798,25 @@ static void activate_device_interrupt_callback(struct fp_img_dev *idev, int stat
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
 
+	g_print("activate_device_interrupt_callback\n");
+	print_hex(vdev->buffer, vdev->buffer_length);
+
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		interrupt_type = translate_interrupt(vdev->buffer,
 						     vdev->buffer_length);
 
 		if (interrupt_type == VFS_SCAN_WAITING_FOR_FINGER) {
-			fpi_ssm_next_state(ssm);
+			if (idev->action == IMG_ACTION_ENROLL &&
+			    idev->dev->state == DEV_STATE_ENROLLING) {
+			     g_print("RESTART FINGER SCAN!\n");
+				struct fpi_ssm *child_ssm;
+				child_ssm = fpi_ssm_new(idev->dev,
+							finger_scan_ssm,
+							SCAN_STATE_LAST);
+				fpi_ssm_start_subsm(ssm, child_ssm);
+			} else {
+				fpi_ssm_next_state(ssm);
+			}
 		} else {
 			fp_err("Unexpected device interrupt (%d) at this state",
 			       interrupt_type);
@@ -1749,12 +1825,13 @@ static void activate_device_interrupt_callback(struct fp_img_dev *idev, int stat
 					     usb_error_to_fprint_fail(idev, -EIO));
 		}
 	} else {
-		fpi_ssm_mark_aborted(ssm, usb_error_to_fprint_fail(idev, -EIO));
+		fpi_ssm_mark_aborted(ssm, usb_error_to_fprint_fail(idev, status));
 	}
 }
 
 static void activate_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1778,10 +1855,12 @@ static void activate_ssm(struct fpi_ssm *ssm)
 
 	case ACTIVATE_STATE_WAIT_DEVICE:
 		if (check_data_exchange(vdev, &MATRIX_ALREADY_ACTIVATED_DEX)) {
+			fp_info("Waiting for device not needed, already active\n");
 			fpi_ssm_next_state(ssm);
 			break;
 		}
 
+		fp_info("Waiting for device now...\n");
 		async_read_from_usb(idev, VFS_READ_INTERRUPT,
 				    vdev->buffer, VFS_USB_INTERRUPT_BUFFER_SIZE,
 				    activate_device_interrupt_callback, ssm);
@@ -1789,7 +1868,7 @@ static void activate_ssm(struct fpi_ssm *ssm)
 
 	default:
 		fp_err("Unknown state");
-		fpi_imgdev_session_error(idev, -EIO);
+		// fpi_imgdev_session_error(idev, -EIO);
 		fpi_ssm_mark_aborted(ssm, -EIO);
 	}
 }
@@ -1797,6 +1876,7 @@ static void activate_ssm(struct fpi_ssm *ssm)
 /* Callback for dev_activate ssm */
 static void dev_activate_callback(struct fpi_ssm *ssm)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1860,13 +1940,26 @@ static void send_deactivate_sequence(struct fpi_ssm *ssm, int sequence)
 
 static void deactivate_ssm(struct fpi_ssm *ssm)
 {
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
 	switch (ssm->cur_state) {
 	case DEACTIVATE_STOP_TRANSFER:
-		/* Using libusb_cancel_transfer should be better but not here */
-		vdev->transfer = NULL;
+		g_clear_pointer(&vdev->timeout, fpi_timeout_cancel);
+
+		if (vdev->transfer) {
+			/* Ignoring further callbacks, not ideal but safer */
+			vdev->transfer->callback = NULL;
+			g_clear_pointer(&vdev->transfer, libusb_cancel_transfer);
+			// fp_handle_events();
+			// libusb_cancel_transfer(vdev->transfer);
+			// fp_handle_events();
+			// g_print("EVENTS DONE, vbuffer is %p, transfer %p\n",
+				// vdev->buffer, vdev->transfer);
+			// g_assert(!vdev->transfer);
+		}
+
 		fpi_ssm_next_state(ssm);
 		break;
 
@@ -1891,6 +1984,7 @@ static void deactivate_ssm(struct fpi_ssm *ssm)
 
 static void dev_deactivate_callback(struct fpi_ssm *ssm)
 {
+	g_print("%s\n",G_STRFUNC);
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1921,6 +2015,46 @@ static void dev_deactivate(struct fp_img_dev *idev)
 
 	ssm = fpi_ssm_new(idev->dev, deactivate_ssm, DEACTIVATE_STATE_LAST);
 	fpi_ssm_start(ssm, dev_deactivate_callback);
+}
+
+static void reactivate_ssm(struct fpi_ssm *ssm)
+{
+	g_print("%s %d\n",G_STRFUNC,ssm->cur_state);
+	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(ssm);
+	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
+	struct fpi_ssm *child_ssm = NULL;
+
+	switch (ssm->cur_state) {
+	case REACTIVATE_STATE_WAIT:
+		g_clear_pointer(&vdev->timeout, fpi_timeout_cancel);
+		vdev->timeout =
+			fpi_timeout_add(100, timeout_fpi_ssm_next_state, ssm);
+		// fp_handle_events();
+		// fpi_ssm_next_state(ssm);
+		break;
+	case REACTIVATE_STATE_DEACTIVATE:
+		child_ssm = fpi_ssm_new(idev->dev, deactivate_ssm, DEACTIVATE_STATE_LAST);
+		break;
+	case REACTIVATE_STATE_ACTIVATE:
+		child_ssm = fpi_ssm_new(idev->dev, activate_ssm, ACTIVATE_STATE_LAST);
+		break;
+	default:
+		fp_err("Unknown reactivate state");
+		fpi_imgdev_session_error(idev, -EIO);
+		fpi_ssm_mark_aborted(ssm, -EIO);
+	}
+
+	if (child_ssm)
+		fpi_ssm_start_subsm(ssm, child_ssm);
+}
+
+static void start_reactivate_subsm(struct fpi_ssm *parent_ssm)
+{
+	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(parent_ssm);
+	struct fpi_ssm *ssm;
+
+	ssm = fpi_ssm_new(idev->dev, reactivate_ssm, REACTIVATE_STATE_LAST);
+	fpi_ssm_start_subsm(parent_ssm, ssm);
 }
 
 static void dev_close(struct fp_img_dev *idev)
@@ -1958,7 +2092,7 @@ struct fp_img_driver vfs0090_driver = {
 	},
 
 	/* Image specification */
-	.flags = FP_IMGDRV_NEEDS_REACTIVATION_BETWEEN_ENROLLS,
+	.flags = 0,
 	.img_width = VFS_IMAGE_SIZE * VFS_IMAGE_RESCALE,
 	.img_height = VFS_IMAGE_SIZE * VFS_IMAGE_RESCALE,
 	.bz3_threshold = 12,

@@ -20,7 +20,8 @@
 
 #define FP_COMPONENT "vfs0090"
 
-#include <fp_internal.h>
+// #include <fp_internal.h>
+#include <drivers_api.h>
 
 #include <assembling.h>
 #include <errno.h>
@@ -43,8 +44,8 @@
 #define EP_IN (1 | LIBUSB_ENDPOINT_IN)
 #define EP_OUT (1 | LIBUSB_ENDPOINT_OUT)
 #define EP_INTERRUPT (LIBUSB_TRANSFER_TYPE_INTERRUPT | LIBUSB_ENDPOINT_IN)
-#define IMG_DEV_FROM_SSM(ssm) ((struct fp_img_dev *) (ssm->dev->priv))
-#define VFS_DEV_FROM_IMG(img) ((struct vfs_dev_t *) img->priv)
+#define IMG_DEV_FROM_SSM(ssm) ((struct fp_img_dev *) (fpi_ssm_get_dev(ssm)->priv))
+#define VFS_DEV_FROM_IMG(img) ((struct vfs_dev_t *) fpi_imgdev_get_user_data(img))
 #define VFS_DEV_FROM_SSM(ssm) (VFS_DEV_FROM_IMG(IMG_DEV_FROM_SSM(ssm)))
 
 /* The main driver structure */
@@ -167,7 +168,7 @@ static int usb_error_to_fprint_fail(struct fp_img_dev *idev, int status)
 static gboolean async_transfer_completed(struct fp_img_dev *idev)
 {
 	struct async_usb_operation_data_t *op_data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	if (!vdev->transfer)
 		return TRUE;
@@ -186,7 +187,7 @@ static void async_write_callback(struct libusb_transfer *transfer)
 		return;
 
 	idev = op_data->idev;
-        vdev = idev->priv;
+        vdev = fpi_imgdev_get_user_data(idev);
 	op_data->completed = TRUE;
 
 	if (transfer->status == LIBUSB_TRANSFER_CANCELLED) {
@@ -222,7 +223,7 @@ static void async_write_to_usb(struct fp_img_dev *idev,
 			       async_operation_cb callback, void* callback_data)
 {
 	struct async_usb_operation_data_t *op_data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	g_assert(async_transfer_completed(idev));
 
@@ -251,7 +252,7 @@ static void async_read_callback(struct libusb_transfer *transfer)
 		return;
 
 	idev = op_data->idev;
-        vdev = idev->priv;
+	vdev = fpi_imgdev_get_user_data(idev);
 	vdev->buffer_length = 0;
 
 	if (transfer->status == LIBUSB_TRANSFER_CANCELLED) {
@@ -283,7 +284,7 @@ static void async_read_from_usb(struct fp_img_dev *idev, int read_mode,
 				async_operation_cb callback, void* callback_data)
 {
 	struct async_usb_operation_data_t *op_data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	g_assert(async_transfer_completed(idev));
 
@@ -360,7 +361,7 @@ static void async_write_encrypted_to_usb(struct fp_img_dev *idev,
 static void async_read_encrypted_callback(struct fp_img_dev *idev, int status, void *data)
 {
 	struct async_usb_encrypted_operation_data_t *enc_op = data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	enc_op->encrypted_data = g_memdup(vdev->buffer, vdev->buffer_length);
 	enc_op->encrypted_data_size = vdev->buffer_length;
@@ -628,7 +629,7 @@ static unsigned char *tls_encrypt(struct fp_img_dev *idev,
 	unsigned char *res, *wr;
 	int res_len;
 
-	vdev = idev->priv;
+	vdev = fpi_imgdev_get_user_data(idev);
 	g_assert(vdev->key_block);
 
 	mac_then_encrypt(0x17, vdev->key_block, data, data_size, &res, &res_len);
@@ -648,7 +649,7 @@ static gboolean tls_decrypt(struct fp_img_dev *idev,
 			    const unsigned char *buffer, int buffer_size,
 			    unsigned char *output_buffer, int *output_len)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	int buff_len = buffer_size - 5;
 	int out_len = buff_len - 0x10;
@@ -739,7 +740,7 @@ struct data_exchange_async_data_t {
 static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 {
 	struct data_exchange_async_data_t *dex_data = data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		if (check_data_exchange_dbg(vdev, dex_data->dex)) {
@@ -763,7 +764,7 @@ static void on_data_exchange_cb(struct fp_img_dev *idev, int status, void *data)
 
 static void do_data_exchange(struct fp_img_dev *idev, struct fpi_ssm *ssm, const struct data_exchange_t *dex, int mode)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct data_exchange_async_data_t *dex_data;
 
 	dex_data = g_new0(struct data_exchange_async_data_t, 1);
@@ -1173,7 +1174,7 @@ static void start_handshake_ssm(struct fp_img_dev *idev, struct fpi_ssm *parent_
 {
 	struct fpi_ssm *ssm;
 
-	ssm = fpi_ssm_new(idev->dev, handshake_ssm, TLS_HANDSHAKE_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev), handshake_ssm, TLS_HANDSHAKE_STATE_LAST);
 	ssm->parentsm = parent_ssm;
 	ssm->priv = g_new0(struct tls_handshake_t, 1);
 
@@ -1449,7 +1450,7 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 
 	/* Initialize private structure */
 	vdev = g_new0(struct vfs_dev_t, 1);
-	idev->priv = vdev;
+	fpi_imgdev_get_user_data(idev) = vdev;
 
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
@@ -1463,7 +1464,7 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	usb_operation(libusb_claim_interface(idev->udev, 0), idev);
 
 	/* Clearing previous device state */
-	ssm = fpi_ssm_new(idev->dev, init_ssm, INIT_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev), init_ssm, INIT_STATE_LAST);
 	ssm->priv = g_new0(struct vfs_init_t, 1);
 	fpi_ssm_start(ssm, dev_open_callback);
 
@@ -1473,7 +1474,7 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 static void led_blink_callback_with_ssm(struct fp_img_dev *idev, int status, void *data)
 {
 	struct fpi_ssm *ssm = data;
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	if (status == LIBUSB_TRANSFER_COMPLETED) {
 		vdev->timeout =
@@ -1643,7 +1644,8 @@ static void start_finger_image_download_subsm(struct fpi_ssm *parent_ssm)
 	struct fpi_ssm *ssm;
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(parent_ssm);
 
-	ssm = fpi_ssm_new(idev->dev, finger_image_download_ssm,
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev),
+			  finger_image_download_ssm,
 			  IMAGE_DOWNLOAD_STATE_LAST);
 
 	ssm->priv = g_new0(struct image_download_t, 1);
@@ -1678,7 +1680,7 @@ static void finger_scan_callback(struct fpi_ssm *ssm)
 
 static void finger_scan_interrupt_callback(struct fp_img_dev *idev, int status, void *data)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
 	g_print("finger_scan_interrupt_callback\n");
@@ -1789,14 +1791,14 @@ static void finger_scan_ssm(struct fpi_ssm *ssm)
 
 static void start_finger_scan(struct fp_img_dev *idev)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct fpi_ssm *ssm;
 
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
 	g_print("start_finger_scan\n");
-	ssm = fpi_ssm_new(idev->dev, finger_scan_ssm, SCAN_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev), finger_scan_ssm, SCAN_STATE_LAST);
 	fpi_ssm_start(ssm, finger_scan_callback);
 }
 
@@ -1809,7 +1811,7 @@ static void send_activate_sequence(struct fpi_ssm *ssm, int sequence)
 
 static void activate_device_interrupt_callback(struct fp_img_dev *idev, int status, void *data)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct fpi_ssm *ssm = data;
 	int interrupt_type;
 
@@ -1822,10 +1824,10 @@ static void activate_device_interrupt_callback(struct fp_img_dev *idev, int stat
 
 		if (interrupt_type == VFS_SCAN_WAITING_FOR_FINGER) {
 			if (idev->action == IMG_ACTION_ENROLL &&
-			    idev->dev->state == DEV_STATE_ENROLLING) {
+			    fpi_imgdev_get_usb_dev(idev)->state == DEV_STATE_ENROLLING) {
 			     g_print("RESTART FINGER SCAN!\n");
 				struct fpi_ssm *child_ssm;
-				child_ssm = fpi_ssm_new(idev->dev,
+				child_ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev),
 							finger_scan_ssm,
 							SCAN_STATE_LAST);
 				fpi_ssm_start_subsm(ssm, child_ssm);
@@ -1914,14 +1916,14 @@ static void dev_activate_callback(struct fpi_ssm *ssm)
 
 static int dev_activate(struct fp_img_dev *idev, enum fp_imgdev_state state)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct fpi_ssm *ssm;
 
 	// SEE IF CAN BE DONE ONLY ON CERTAIN CASES
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
-	ssm = fpi_ssm_new(idev->dev, activate_ssm, ACTIVATE_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev), activate_ssm, ACTIVATE_STATE_LAST);
 	fpi_ssm_start(ssm, dev_activate_callback);
 
 	return 0;
@@ -2028,7 +2030,7 @@ static void dev_deactivate_callback(struct fpi_ssm *ssm)
 
 static void dev_deactivate(struct fp_img_dev *idev)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 	struct fpi_ssm *ssm;
 
 	g_clear_pointer(&vdev->timeout, fpi_timeout_cancel);
@@ -2037,7 +2039,7 @@ static void dev_deactivate(struct fp_img_dev *idev)
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
-	ssm = fpi_ssm_new(idev->dev, deactivate_ssm, DEACTIVATE_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev), deactivate_ssm, DEACTIVATE_STATE_LAST);
 	fpi_ssm_start(ssm, dev_deactivate_callback);
 }
 
@@ -2057,10 +2059,12 @@ static void reactivate_ssm(struct fpi_ssm *ssm)
 		// fpi_ssm_next_state(ssm);
 		break;
 	case REACTIVATE_STATE_DEACTIVATE:
-		child_ssm = fpi_ssm_new(idev->dev, deactivate_ssm, DEACTIVATE_STATE_LAST);
+		child_ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev),
+					deactivate_ssm, DEACTIVATE_STATE_LAST);
 		break;
 	case REACTIVATE_STATE_ACTIVATE:
-		child_ssm = fpi_ssm_new(idev->dev, activate_ssm, ACTIVATE_STATE_LAST);
+		child_ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev),
+					activate_ssm, ACTIVATE_STATE_LAST);
 		break;
 	default:
 		fp_err("Unknown reactivate state");
@@ -2077,13 +2081,14 @@ static void start_reactivate_subsm(struct fpi_ssm *parent_ssm)
 	struct fp_img_dev *idev = IMG_DEV_FROM_SSM(parent_ssm);
 	struct fpi_ssm *ssm;
 
-	ssm = fpi_ssm_new(idev->dev, reactivate_ssm, REACTIVATE_STATE_LAST);
+	ssm = fpi_ssm_new(fpi_imgdev_get_usb_dev(idev),
+			  reactivate_ssm, REACTIVATE_STATE_LAST);
 	fpi_ssm_start_subsm(parent_ssm, ssm);
 }
 
 static void dev_close(struct fp_img_dev *idev)
 {
-	struct vfs_dev_t *vdev = idev->priv;
+	struct vfs_dev_t *vdev = fpi_imgdev_get_user_data(idev);
 
 	usb_operation(libusb_release_interface(idev->udev, 0), NULL);
 
@@ -2094,7 +2099,7 @@ static void dev_close(struct fp_img_dev *idev)
 	g_clear_pointer(&vdev->buffer, g_free);
 	vdev->buffer_length = 0;
 
-	g_free(idev->priv);
+	g_free(vdev);
 	fpi_imgdev_close_complete(idev);
 }
 

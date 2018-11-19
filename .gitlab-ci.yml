@@ -2,6 +2,7 @@ image: fedora:rawhide
 stages:
   - build
   - test
+  - deploy
 
 variables:
   DEPENDENCIES: libusb1-devel glib2-devel nss-devel pixman-devel systemd meson gtk-doc
@@ -65,3 +66,31 @@ flatpak:
 .flatpak_template: &flatpak
     <<: *flatpak_script
     <<: *flatpak_artifacts
+
+review:
+    stage: deploy
+    dependencies:
+        - flatpak
+    script:
+        - echo "Generating flatpak deployment"
+    artifacts:
+        paths:
+            - ${BUNDLE}
+        expire_in: 30 days
+    environment:
+        name: review/$CI_COMMIT_REF_NAME
+        url: https://gitlab.freedesktop.org/$CI_PROJECT_PATH/-/jobs/$CI_JOB_ID/artifacts/raw/${BUNDLE}
+        on_stop: stop_review
+    except:
+        - tags
+
+stop_review:
+    stage: deploy
+    script:
+        - echo "Stopping flatpak deployment"
+    when: manual
+    environment:
+        name: review/$CI_COMMIT_REF_NAME
+        action: stop
+    except:
+        - tags

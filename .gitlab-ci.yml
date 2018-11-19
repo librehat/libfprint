@@ -7,11 +7,9 @@ variables:
                 gcc gcc-c++ glibc-devel libX11-devel libXv-devel gtk3-devel
 
 
-before_script:
-  - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES
-
 .build_one_driver_template: &build_one_driver
   script:
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES
     # Build with a driver that doesn't need imaging, or nss
     - meson -Ddrivers=elan . _build
     - ninja -C _build
@@ -19,6 +17,7 @@ before_script:
 
 .build_template: &build
   script:
+    - dnf update -y --nogpgcheck && dnf install -y --nogpgcheck $DEPENDENCIES
     # And build with everything
     - meson -Ddrivers=all . _build
     - ninja -C _build

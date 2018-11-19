@@ -82,17 +82,5 @@ review:
     environment:
         name: review/$CI_COMMIT_REF_NAME
         url: https://gitlab.freedesktop.org/$CI_PROJECT_PATH/-/jobs/$CI_JOB_ID/artifacts/raw/${BUNDLE}
-        on_stop: stop_review
-    except:
-        - tags
-
-stop_review:
-    stage: deploy
-    script:
-        - echo "Stopping flatpak deployment"
-    when: manual
-    environment:
-        name: review/$CI_COMMIT_REF_NAME
-        action: stop
     except:
         - tags

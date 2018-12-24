@@ -197,3 +197,19 @@ int fpi_ssm_get_error(struct fpi_ssm *machine)
 {
 	return machine->error;
 }
+
+void fpi_ssm_set_error(struct fpi_ssm *machine, int error)
+{
+	machine->error = error;
+}
+
+void fpi_ssm_set_subsm(struct fpi_ssm *parent, struct fpi_ssm *child)
+{
+	BUG_ON(parent->parentsm && parent->parentsm != child && child != NULL);
+	parent->parentsm = child;
+}
+
+struct fpi_ssm *fpi_ssm_get_parentsm(struct fpi_ssm *machine)
+{
+	return machine->parentsm;
+}

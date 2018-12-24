@@ -260,7 +260,10 @@ void fpi_ssm_set_user_data(struct fpi_ssm *machine,
 	void *user_data);
 void *fpi_ssm_get_user_data(struct fpi_ssm *machine);
 int fpi_ssm_get_error(struct fpi_ssm *machine);
+void fpi_ssm_set_error(struct fpi_ssm *machine, int error);
 int fpi_ssm_get_cur_state(struct fpi_ssm *machine);
+void fpi_ssm_set_subsm(struct fpi_ssm *parent, struct fpi_ssm *child);
+struct fpi_ssm *fpi_ssm_get_parentsm(struct fpi_ssm *machine);
 
 void fpi_drvcb_open_complete(struct fp_dev *dev, int status);
 void fpi_drvcb_close_complete(struct fp_dev *dev);

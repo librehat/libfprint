@@ -87,6 +87,9 @@ enum SCAN_STATES {
 	SCAN_STATE_COMPLETED,
 	SCAN_STATE_SUCCESS,
 	SCAN_STATE_SUCCESS_LOW_QUALITY,
+	SCAN_STATE_DB_MATCH_RESULT_WAIT,
+	SCAN_STATE_DB_MATCH,
+	SCAN_STATE_DB_MATCH_FAILED,
 
 	SCAN_STATE_HANDLE_SCAN_ERROR,
 	SCAN_STATE_ERROR_LED_BLINK,
@@ -106,7 +109,24 @@ enum VFS_SCAN_INTERRUPTS {
 	VFS_SCAN_COMPLETED,
 	VFS_SCAN_SUCCESS,
 	VFS_SCAN_SUCCESS_LOW_QUALITY,
+	VFS_SCAN_DB_MATCH_RESULT_WAIT,
+	VFS_SCAN_DB_MATCH,
+	VFS_SCAN_DB_MATCH_FAILED,
 	VFS_SCAN_UNKNOWN = 100,
+};
+
+enum DB_CHECK_STATES {
+	DB_CHECK_STATE_1,
+	DB_CHECK_STATE_2,
+	// DB_CHECK_REQUEST_DONE,
+
+	// DB_CHECK_STATE_GREEN_LED_BLINK,
+	// DB_CHECK_STATE_AFTER_GREEN_LED_BLINK,
+	// DB_CHECK_STATE_RED_LED_BLINK,
+	// DB_CHECK_STATE_AFTER_RED_LED_BLINK,
+	// DB_CHECK_STATE_SUBMIT_RESULT,
+
+	DB_CHECK_STATE_LAST
 };
 
 enum IMAGE_DOWNLOAD_STATES {
@@ -684,12 +704,33 @@ static const struct data_exchange_t MATRIX_ALREADY_ACTIVATED_DEX = {
 	.rsp_length = 2,
 };
 
+static const struct data_exchange_t DB_IDENTIFY_SEQUENCES[] = {
+	{
+		.msg = (unsigned char []) {
+			0x5e, 0x02, 0xff, 0x03, 0x00, 0x05, 0x00, 0x01,
+			0x00, 0x00, 0x00, 0x00, 0x00
+		},
+		.msg_length = 13,
+		.rsp = NULL,
+		.rsp_length = -1,
+	},
+	{
+		.msg = (unsigned char []) {
+			0x4b, 0x00, 0x00, 0x0b, 0x00, 0x53, 0x74, 0x67,
+			0x57, 0x69, 0x6e, 0x64, 0x73, 0x6f, 0x72, 0x00
+		},
+		.msg_length = 16,
+		.rsp = NULL,
+		.rsp_length = -1,
+	},
+};
+
 static const struct data_exchange_t DEACTIVATE_SEQUENCES[] = {
 	{
 		.msg = (unsigned char []) { 0x60, 0x00, 0x00, 0x00, 0x00 },
 		.msg_length = 5,
 		.rsp = (unsigned char []) { 0xf5, 0x04 },
-		.rsp_length = 2,
+		.rsp_length = -1,
 	},
 	{
 		.msg = (unsigned char []) { 0x62, 0x00, 0x00, 0x00, 0x00 },

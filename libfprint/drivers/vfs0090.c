@@ -48,6 +48,8 @@
 
 /* The main driver structure */
 struct vfs_dev_t {
+	gboolean supports_imaging;
+
 	/* Buffer for saving usb data through states */
 	unsigned char *buffer;
 	unsigned int buffer_length;
@@ -542,6 +544,7 @@ static PK11Context* hmac_make_context(const unsigned char *key_bytes, int key_le
 
 	SECItem key;
 
+	key.type = siBuffer;
 	key.data = (unsigned char*) key_bytes;
 	key.len = key_len;
 
@@ -1192,6 +1195,9 @@ static int translate_interrupt(unsigned char *interrupt, int interrupt_size)
 	const unsigned char scan_completed[] = { 0x03, 0x41, 0x03, 0x00, 0x40 };
 
 	const unsigned char scan_success[] = { 0x03, 0x43, 0x04, 0x00, 0x41 };
+	const unsigned char db_identified_prefix[] = { 0x03, 0x00 };
+	const unsigned char db_unidentified_prefix[] = { 0x04, 0x00 };
+	const unsigned char db_checked_sufix[] = { 0x00, 0xdb };
 	const unsigned char low_quality_scan[] = { 0x03, 0x42, 0x04, 0x00, 0x40 };
 	const unsigned char scan_failed_too_short[] = { 0x03, 0x60, 0x07, 0x00, 0x40 };
 	const unsigned char scan_failed_too_short2[] = { 0x03, 0x61, 0x07, 0x00, 0x41 };
@@ -1233,6 +1239,20 @@ static int translate_interrupt(unsigned char *interrupt, int interrupt_size)
 		printf("ALTERNATIVE SCAN, let's see this result!!!!\n");
 		return VFS_SCAN_SUCCESS_LOW_QUALITY;
 	}
+
+	if (expected_size == interrupt_size &&
+	    memcmp(db_identified_prefix, interrupt, sizeof(db_identified_prefix)) == 0 &&
+	    memcmp(db_checked_sufix, interrupt + interrupt_size - sizeof(db_checked_sufix), sizeof(db_checked_sufix)) == 0) {
+		fp_info("Identified DB finger id %d", interrupt[2]);
+ 		return VFS_SCAN_DB_MATCH;
+ 	}
+
+	if (expected_size == interrupt_size &&
+	    memcmp(db_unidentified_prefix, interrupt, sizeof(db_unidentified_prefix)) == 0 &&
+	    memcmp(db_checked_sufix, interrupt + interrupt_size - sizeof(db_checked_sufix), sizeof(db_checked_sufix)) == 0) {
+		fp_info("Finger DB identification falied");
+ 		return VFS_SCAN_DB_MATCH_FAILED;
+ 	}
 
 	if (sizeof(scan_failed_too_short) == interrupt_size &&
 	    memcmp(scan_failed_too_short, interrupt, interrupt_size) == 0) {
@@ -1393,12 +1413,21 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	struct fpi_ssm *ssm;
 	struct vfs_dev_t *vdev;
 	libusb_device_handle *udev;
+	struct libusb_device_descriptor usb_desc;
 	SECStatus secs_status;
 	int usb_config;
+	int ret;
 
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
 		fp_err("could not initialise NSS");
+		return -1;
+	}
+
+	udev = fpi_dev_get_usb_dev(dev);
+	ret = libusb_get_device_descriptor(libusb_get_device(udev), &usb_desc);
+	if (ret < 0) {
+		fp_err("Failed to get device descriptor");
 		return -1;
 	}
 
@@ -1412,7 +1441,9 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
-	udev = fpi_dev_get_usb_dev(dev);
+	vdev->supports_imaging = (usb_desc.idProduct == 0x0090);
+	// vdev->supports_imaging = FALSE;
+
 	usb_operation(libusb_reset_device(udev), idev);
 	usb_operation(libusb_get_configuration(udev, &usb_config), idev);
 
@@ -1430,6 +1461,7 @@ static int dev_open(struct fp_img_dev *idev, unsigned long driver_data)
 
 static void led_blink_callback_with_ssm(struct fp_img_dev *idev, int status, void *data)
 {
+	printf("led_blink_callback_with_ssm %p\n",data);
 	struct fpi_ssm *ssm = data;
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 
@@ -1499,7 +1531,7 @@ static void finger_image_download_read_callback(struct fp_img_dev *idev, int sta
 	int offset = (fpi_ssm_get_cur_state(ssm) == IMAGE_DOWNLOAD_STATE_1) ? 0x12 : 0x06;
 	int data_size = vdev->buffer_length - offset;
 
-	if (status != LIBUSB_TRANSFER_COMPLETED) {
+	if (status != LIBUSB_TRANSFER_COMPLETED || data_size <= 0) {
 		fp_err("Image download failed at state %d", fpi_ssm_get_cur_state(ssm));
 		if (status != LIBUSB_TRANSFER_CANCELLED)
 			fpi_imgdev_session_error(idev, -EIO);
@@ -1608,6 +1640,110 @@ static void start_finger_image_download_subsm(struct fp_img_dev *idev, struct fp
 	fpi_ssm_start(ssm, finger_image_download_callback);
 }
 
+static void finger_db_check_callback(struct fpi_ssm *ssm, struct fp_dev *dev, void *data)
+{
+	struct fp_img_dev *idev = FP_IMG_DEV(dev);
+	struct fpi_ssm *parent_ssm = data;
+
+	if (!fpi_ssm_get_error(ssm)) {
+		// fpi_ssm_mark_completed(parent_ssm);
+		fpi_ssm_jump_to_state(parent_ssm, SCAN_STATE_DB_MATCH_RESULT_WAIT);
+	} else {
+		fp_err("Scan failed failed at state %d, unexpected"
+		       "device reply during db check", fpi_ssm_get_cur_state(ssm));
+		fpi_imgdev_session_error(idev, fpi_ssm_get_error(ssm));
+		fpi_ssm_mark_failed(parent_ssm, fpi_ssm_get_error(ssm));
+	}
+
+	fpi_ssm_free(ssm);
+}
+
+static void send_db_check_sequence(struct fp_img_dev *idev, struct fpi_ssm *ssm, int sequence)
+{
+	do_data_exchange(idev, ssm, &DB_IDENTIFY_SEQUENCES[sequence], DATA_EXCHANGE_ENCRYPTED);
+}
+
+static void finger_db_check_ssm(struct fpi_ssm *ssm, struct fp_dev *dev, void *data)
+{
+	struct fp_img_dev *idev = FP_IMG_DEV(dev);
+	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
+	// struct db_check_t * = data;
+
+	switch (fpi_ssm_get_cur_state(ssm)) {
+	case DB_CHECK_STATE_1:
+	case DB_CHECK_STATE_2:
+		send_db_check_sequence(idev, ssm, fpi_ssm_get_cur_state(ssm) - DB_CHECK_STATE_1);
+		break;
+
+	// case DB_CHECK_REQUEST_DONE:
+	// 	async_read_from_usb(idev, VFS_READ_INTERRUPT,
+	// 			    vdev->buffer, VFS_USB_INTERRUPT_BUFFER_SIZE,
+	// 			    finger_scan_interrupt_callback, ssm);
+	// 	// finger_image_submit(idev, imgdown);
+	// 	fpi_imgdev_abort_scan(idev, FP_VERIFY_MATCH)
+
+	// 	if ((fpi_imgdev_get_action(idev) == IMG_ACTION_VERIFY ||
+	// 	     fpi_imgdev_get_action(idev) == IMG_ACTION_IDENTIFY) &&
+	// 	    fpi_imgdev_get_action_result(idev) != FP_VERIFY_MATCH) {
+	// 		fpi_ssm_jump_to_state(ssm, DB_CHECK_STATE_RED_LED_BLINK);
+	// 	} else {
+	// 		fpi_ssm_jump_to_state(ssm, DB_CHECK_STATE_GREEN_LED_BLINK);
+	// 	}
+
+	// 	break;
+
+	// case DB_CHECK_STATE_GREEN_LED_BLINK:
+	// 	async_data_exchange(idev, DATA_EXCHANGE_ENCRYPTED,
+	// 			    LED_GREEN_BLINK, G_N_ELEMENTS(LED_GREEN_BLINK),
+	// 			    vdev->buffer, VFS_USB_BUFFER_SIZE,
+	// 			    led_blink_callback_with_ssm, ssm);
+
+	// 	break;
+
+
+	// case DB_CHECK_STATE_RED_LED_BLINK:
+	// 	async_data_exchange(idev, DATA_EXCHANGE_ENCRYPTED,
+	// 			    LED_RED_BLINK, G_N_ELEMENTS(LED_RED_BLINK),
+	// 			    vdev->buffer, VFS_USB_BUFFER_SIZE,
+	// 			    led_blink_callback_with_ssm, ssm);
+
+	// 	break;
+
+	// case DB_CHECK_STATE_AFTER_GREEN_LED_BLINK:
+	// case DB_CHECK_STATE_AFTER_RED_LED_BLINK:
+	// 	fpi_ssm_jump_to_state(ssm, DB_CHECK_STATE_SUBMIT_RESULT);
+	// 	break;
+
+	// case DB_CHECK_STATE_SUBMIT_RESULT:
+	// 	if (fpi_imgdev_get_action(idev) == IMG_ACTION_ENROLL &&
+	// 	    fpi_imgdev_get_action_result(idev) != FP_ENROLL_COMPLETE) {
+	// 		start_reactivate_subsm(idev, ssm);
+	// 	} else {
+	// 		fpi_ssm_mark_completed(ssm);
+	// 	}
+
+	// 	fpi_imgdev_report_finger_status(idev, FALSE);
+	// 	break;
+
+	default:
+		fp_err("Unknown db check state");
+		fpi_imgdev_session_error(idev, -EIO);
+		fpi_ssm_mark_failed(ssm, -EIO);
+	}
+}
+
+static void start_finger_db_check_subsm(struct fp_img_dev *idev, struct fpi_ssm *parent_ssm)
+{
+	struct fpi_ssm *ssm;
+
+	ssm = fpi_ssm_new(FP_DEV(idev),
+			  finger_db_check_ssm,
+			  DB_CHECK_STATE_LAST,
+			  parent_ssm);
+
+	fpi_ssm_start(ssm, finger_db_check_callback);
+}
+
 static void finger_scan_callback(struct fpi_ssm *ssm, struct fp_dev *dev, void *data)
 {
 	struct fp_img_dev *idev = FP_IMG_DEV(dev);
@@ -1660,6 +1796,7 @@ static void finger_scan_ssm(struct fpi_ssm *ssm, struct fp_dev *dev, void *data)
 	case SCAN_STATE_WAITING_FOR_FINGER:
 	case SCAN_STATE_IN_PROGRESS:
 	case SCAN_STATE_COMPLETED:
+	case SCAN_STATE_DB_MATCH_RESULT_WAIT:
 		async_read_from_usb(idev, VFS_READ_INTERRUPT,
 				    vdev->buffer, VFS_USB_INTERRUPT_BUFFER_SIZE,
 				    finger_scan_interrupt_callback, ssm);
@@ -1691,13 +1828,36 @@ static void finger_scan_ssm(struct fpi_ssm *ssm, struct fp_dev *dev, void *data)
 			fpi_ssm_set_error(ssm, FP_ENROLL_RETRY_CENTER_FINGER);
 			fpi_ssm_jump_to_state(ssm, SCAN_STATE_HANDLE_SCAN_ERROR);
 			break;
-		} else if (fpi_imgdev_get_action(idev) == IMG_ACTION_VERIFY) {
+		} else if (fpi_imgdev_get_action(idev) == IMG_ACTION_VERIFY ||
+		           fpi_imgdev_get_action(idev) == IMG_ACTION_IDENTIFY) {
 			fp_warn("Low quality image in verification, might fail");
 		}
 
 	case SCAN_STATE_SUCCESS:
-		start_finger_image_download_subsm(idev, ssm);
+		if (vdev->supports_imaging)
+			start_finger_image_download_subsm(idev, ssm);
+		else if (fpi_imgdev_get_action(idev) == IMG_ACTION_VERIFY ||
+		         fpi_imgdev_get_action(idev) == IMG_ACTION_IDENTIFY)
+			start_finger_db_check_subsm(idev, ssm);
 
+		break;
+
+	case SCAN_STATE_DB_MATCH:
+		fpi_imgdev_abort_scan(idev, FP_VERIFY_MATCH);
+		fpi_imgdev_report_finger_status(idev, FALSE);
+		/* Do blinking! */
+		fpi_ssm_mark_completed(ssm);
+		break;
+
+	case SCAN_STATE_DB_MATCH_FAILED:
+		g_print("MATCH FAILEDDDD\n");
+		if (vdev->supports_imaging) {
+			start_finger_image_download_subsm(idev, ssm);
+			break;
+		}
+		fpi_imgdev_abort_scan(idev, FP_VERIFY_NO_MATCH);
+		fpi_ssm_jump_to_state(ssm, SCAN_STATE_HANDLE_SCAN_ERROR);
+		// fpi_imgdev_report_finger_status(idev, FALSE);
 		break;
 
 	case SCAN_STATE_HANDLE_SCAN_ERROR:
@@ -1854,8 +2014,18 @@ static int dev_activate(struct fp_img_dev *idev, enum fp_imgdev_state state)
 	struct vfs_dev_t *vdev = VFS_DEV_FROM_IMG(idev);
 	struct fpi_ssm *ssm;
 
+	if (!vdev->supports_imaging &&
+	    fpi_imgdev_get_action(idev) != IMG_ACTION_VERIFY &&
+	    fpi_imgdev_get_action(idev) != IMG_ACTION_IDENTIFY) {
+		fp_err("This device currently only supports verification and "
+		        "identification, please use a Windows physical or virtual "
+		        "(VirtualBox) installation to enroll your fingers, while "
+		        "capture is not supported at all");
+		return -1;
+	}
+
 	// SEE IF CAN BE DONE ONLY ON CERTAIN CASES
-	vdev->buffer = g_malloc(VFS_USB_BUFFER_SIZE);
+	vdev->buffer = g_malloc0(VFS_USB_BUFFER_SIZE);
 	vdev->buffer_length = 0;
 
 	ssm = fpi_ssm_new(FP_DEV(idev), activate_ssm, ACTIVATE_STATE_LAST, NULL);
@@ -2017,6 +2187,8 @@ static void dev_close(struct fp_img_dev *idev)
 /* Usb id table of device */
 static const struct usb_id id_table[] = {
 	{ .vendor = 0x138a, .product = 0x0090 },
+	{ .vendor = 0x138a, .product = 0x0097 },
+	{ .vendor = 0x138a, .product = 0x009d },
 	{ 0, 0, 0, },
 };
 
@@ -2026,7 +2198,7 @@ struct fp_img_driver vfs0090_driver = {
 	.driver = {
 		.id = VFS0090_ID,
 		.name = FP_COMPONENT,
-		.full_name = "Validity VFS0090",
+		.full_name = "Validity VFS009X",
 		.id_table = id_table,
 		.scan_type = FP_SCAN_TYPE_PRESS,
 	},

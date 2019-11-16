@@ -6,7 +6,7 @@ project('libfprint', [ 'c', 'cpp' ],
           'warning_level=1',
           'c_std=c99',
         ],
-        meson_version: '>= 0.45.0')
+        meson_version: '>= 0.48.0')
 
 add_project_arguments([ '-D_GNU_SOURCE' ], language: 'c')
 add_project_arguments([ '-DG_LOG_DOMAIN="libfprint"' ], language: 'c')
@@ -42,12 +42,13 @@ libversion = '@0@.@1@.@2@'.format(soversion, current, revision)
 
 # Dependencies
 glib_dep = dependency('glib-2.0', version: '>= 2.50')
+gmodule_dep = dependency('gmodule-2.0', version: '>= 2.50')
 libusb_dep = dependency('libusb-1.0', version: '>= 0.9.1')
 mathlib_dep = cc.find_library('m', required: false)
 
 # Drivers
 drivers = get_option('drivers').split(',')
-all_drivers = [ 'upekts', 'upektc', 'upeksonly', 'vcom5s', 'uru4000', 'aes1610', 'aes1660', 'aes2501', 'aes2550', 'aes2660', 'aes3500', 'aes4000', 'vfs101', 'vfs301', 'vfs5011', 'upektc_img', 'etes603', 'vfs0050', 'elan' ]
+all_drivers = [ 'upekts', 'upektc', 'upeksonly', 'vcom5s', 'uru4000', 'aes1610', 'aes1660', 'aes2501', 'aes2550', 'aes2660', 'aes3500', 'aes4000', 'vfs101', 'vfs301', 'vfs5011', 'upektc_img', 'etes603', 'elan' ]
 primitive_drivers = [ 'upekts' ]
 
 if drivers == [ 'all' ]

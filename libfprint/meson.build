@@ -133,6 +133,9 @@ if aes3k
     drivers_sources += ['drivers/aes3k.c' ]
 endif
 
+# if...
+# drivers_sources += 'drivers/shared_loader.c'
+
 other_sources = []
 if imaging_dep.found()
     other_sources += [ 'fpi-img-pixman.c' ]
@@ -155,8 +158,23 @@ libfprint_sources += configure_file(input: 'empty_file',
                                     ])
 
 deps = [ mathlib_dep, glib_dep, libusb_dep, nss_dep, imaging_dep ]
+
+symbol_map = files('libfprint-drivers.map')
+libfprint_priv = static_library('fprint-private',
+                    libfprint_sources + other_sources + ['drivers/shared_loader.c'],
+                    c_args: common_cflags + cc.get_supported_arguments([
+                        '-fvisibility=default'
+                    ]),
+                    include_directories: [
+                      root_inc,
+                      include_directories('nbis/include'),
+                    ],
+                    # gnu_symbol_visibility: 'default',
+                    dependencies: [deps, gmodule_dep],
+                    install: false)
+
 libfprint = library('fprint',
-                    libfprint_sources + drivers_sources + nbis_sources + other_sources,
+                    drivers_sources + nbis_sources,
                     soversion: soversion,
                     version: libversion,
                     c_args: common_cflags + drivers_cflags,
@@ -164,6 +182,10 @@ libfprint = library('fprint',
                       root_inc,
                       include_directories('nbis/include'),
                     ],
+                    gnu_symbol_visibility: 'hidden',
+                    link_args: '-Wl,--version-script,@0@/@1@'.format(meson.source_root(), symbol_map[0]),
+                    link_depends: symbol_map,
+                    link_with: libfprint_priv,
                     dependencies: deps,
                     install: true)
 

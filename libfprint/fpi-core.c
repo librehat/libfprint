@@ -148,10 +148,16 @@ static void register_driver(struct fp_driver *drv)
 }
 
 #include "drivers_arrays.h"
+#include "drivers/shared_loader.h"
 
 static void register_drivers(void)
 {
 	unsigned int i;
+
+	for (GSList *l = fpi_shared_drivers_get(); l; l = l->next) {
+		struct fp_driver *driver = l->data;
+		register_driver(driver);
+	}
 
 	for (i = 0; i < G_N_ELEMENTS(primitive_drivers); i++)
 		register_driver(primitive_drivers[i]);
@@ -796,6 +802,7 @@ API_EXPORTED int fp_init(void)
 	if (r < 0)
 		return r;
 
+	fpi_shared_drivers_register();
 	register_drivers();
 	fpi_poll_init();
 	return 0;
@@ -830,6 +837,7 @@ API_EXPORTED void fp_exit(void)
 	fpi_poll_exit();
 	g_slist_free(registered_drivers);
 	registered_drivers = NULL;
+	fpi_shared_drivers_unregister();
 	libusb_exit(fpi_usb_ctx);
 }
 

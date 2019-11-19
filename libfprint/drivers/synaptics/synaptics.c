@@ -514,7 +514,7 @@ list_msg_cb(FpiDeviceSynaptics *self,
 						fp_print_set_username (print, username);
 				}
 
-				g_ptr_array_add (self->list_result, print);
+				g_ptr_array_add (self->list_result, g_object_ref_sink (print));
 			}
 
 			synaptics_sensor_cmd (self,

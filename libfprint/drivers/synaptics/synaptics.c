@@ -535,7 +535,7 @@ list(FpDevice *device)
 
 	G_DEBUG_HERE();
 
-	self->list_result = g_ptr_array_new ();
+	self->list_result = g_ptr_array_new_with_free_func (g_object_unref);
 	synaptics_sensor_cmd (self, 0, BMKT_CMD_GET_TEMPLATE_RECORDS, NULL, 0, list_msg_cb);
 }
 

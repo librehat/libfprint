@@ -47,6 +47,7 @@ test:
     - meson -Ddrivers=all . _build
     - ninja -C _build
     - meson test -C _build --verbose --no-stdsplit
+    - scripts/uncrustify.sh --check
 
 test_indent:
   stage: test

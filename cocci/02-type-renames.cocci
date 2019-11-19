@@ -17,12 +17,31 @@ typedef FpDevice;
 -struct fp_dev
 +FpDevice
 
+@ fp_dscv_dev @
+typedef FpDevice;
+@@
+-struct fp_dscv_dev
++FpDevice
+
 @ FpDevice_cast @
 typedef FpDevice;
 expression dev;
 @@
 -(FpDevice*) dev
 +FP_DEVICE (dev)
+
+@ fp_print_data @
+typedef FpPrint;
+@@
+-struct fp_print_data
++FpPrint
+
+@ FpPrint_cast @
+typedef FpPrint;
+expression data;
+@@
+-(FpPrint*) data
++FP_PRINT (data)
 
 @ FP_DEV_cast @
 expression dev;
@@ -62,3 +81,11 @@ typedef GUsbDevice;
 -libusb_device_handle
 +GUsbDevice
 
+@ fprintf_error @
+identifier dev;
+identifier func;
+@@
+func(..., FpImageDevice *dev, ...)
+{
+   ...
+}

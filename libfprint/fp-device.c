@@ -358,6 +358,9 @@ fp_device_finalize (GObject *object)
 
   g_slist_free_full (priv->sources, (GDestroyNotify) g_source_destroy);
 
+  g_clear_pointer (&priv->current_idle_cancel_source, g_source_destroy);
+  g_clear_pointer (&priv->current_task_idle_return_source, g_source_destroy);
+
   g_clear_pointer (&priv->device_id, g_free);
   g_clear_pointer (&priv->device_name, g_free);
 
@@ -1794,8 +1797,8 @@ typedef enum _FpDeviceTaskReturnType
   FP_DEVICE_TASK_RETURN_INT,
   FP_DEVICE_TASK_RETURN_BOOL,
   FP_DEVICE_TASK_RETURN_OBJECT,
-  FP_DEVICE_TASK_RETURN_ERROR,
   FP_DEVICE_TASK_RETURN_PTR_ARRAY,
+  FP_DEVICE_TASK_RETURN_ERROR,
 } FpDeviceTaskReturnType;
 
 typedef struct _FpDeviceTaskReturnData
@@ -1821,24 +1824,21 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
   priv->current_action = FP_DEVICE_ACTION_NONE;
   priv->current_task_idle_return_source = NULL;
 
-  if (g_cancellable_is_cancelled (g_task_get_cancellable (task)))
+  if (g_task_return_error_if_cancelled (task))
     {
       switch (data->type) {
         case FP_DEVICE_TASK_RETURN_OBJECT:
           g_object_unref (data->data);
           break;
+        case FP_DEVICE_TASK_RETURN_PTR_ARRAY:
+          g_ptr_array_unref (data->data);
+          break;
         case FP_DEVICE_TASK_RETURN_ERROR:
           g_error_free (data->data);
           break;
-        case FP_DEVICE_TASK_RETURN_PTR_ARRAY:
-          g_ptr_array_unref (data->data);
         default:
           break;
       }
-
-      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_CANCELLED,
-                               "Operation was cancelled");
-
     }
   else
     {
@@ -1853,7 +1853,8 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
           g_task_return_pointer (task, data->data, g_object_unref);
           break;
         case FP_DEVICE_TASK_RETURN_PTR_ARRAY:
-          g_task_return_pointer (task, data->data, (GDestroyNotify) g_ptr_array_unref);
+          g_task_return_pointer (task, data->data,
+                                 (GDestroyNotify) g_ptr_array_unref);
           break;
         case FP_DEVICE_TASK_RETURN_ERROR:
           g_task_return_error (task, data->data);
@@ -1888,6 +1889,8 @@ fp_device_return_task_in_idle (FpDevice               *device,
   data->data = return_data;
 
   priv->current_task_idle_return_source = g_idle_source_new ();
+  g_source_set_priority (priv->current_task_idle_return_source,
+                         g_task_get_priority (priv->current_task));
   g_source_set_callback (priv->current_task_idle_return_source,
                          fp_device_task_return_in_idle_cb,
                          data,

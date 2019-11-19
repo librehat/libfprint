@@ -141,8 +141,12 @@ cmd_recieve_cb (FpiUsbTransfer *transfer,
 			 self->cmd_seq_num);
 	}
 
-	if (callback)
+	if (callback) {
+		// if (!self->cmd_pending_transfer && resp.complete)
+		// 	self->cmd_ssm = NULL;
+
 		callback (self, &resp, NULL);
+	}
 
 	/* Callback may have queued a follow up command, then we need
 	 * to restart the SSM. If not, we'll finish/wait for interrupt

@@ -1350,7 +1350,7 @@ fp_device_list_prints (FpDevice           *device,
  *
  * See fp_device_list_prints().
  *
- * Returns: (element-type FpPrint) (transfer full): Array of prints or %NULL on error
+ * Returns: (element-type FpPrint) (transfer container): Array of prints or %NULL on error
  */
 GPtrArray *
 fp_device_list_prints_finish (FpDevice     *device,
@@ -2159,10 +2159,15 @@ fpi_device_delete_complete (FpDevice *device,
 /**
  * fpi_device_list_complete:
  * @device: The #FpDevice
- * @prints: (element-type FpPrint) (transfer full): Possibly empty array of prints or %NULL on error
+ * @prints: (element-type FpPrint) (transfer container): Possibly empty array of prints or %NULL on error
  * @error: The #GError or %NULL on success
  *
  * Finish an ongoing list operation.
+ *
+ * Please note that the @prints array will be free'ed using
+ * g_ptr_array_unref() and the elements are destroyed automatically.
+ * As such, you must use g_ptr_array_new_with_free_func() with
+ * g_object_unref() as free func to create the array.
  */
 void
 fpi_device_list_complete (FpDevice  *device,
@@ -2480,7 +2485,7 @@ fp_device_delete_print_sync (FpDevice     *device,
  *
  * List device stored prints synchronously.
  *
- * Returns: (element-type FpPrint) (transfer full): Array of prints, or %NULL on error
+ * Returns: (element-type FpPrint) (transfer container): Array of prints, or %NULL on error
  */
 GPtrArray *
 fp_device_list_prints_sync (FpDevice     *device,

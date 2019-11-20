@@ -118,7 +118,7 @@ struct _FpiDeviceSynaptics
 
   GCancellable *interrupt_cancellable;
 
-  gint enroll_progress;
+  gint enroll_stage;
 	gboolean finger_on_sensor;
 	GPtrArray *list_result;
 

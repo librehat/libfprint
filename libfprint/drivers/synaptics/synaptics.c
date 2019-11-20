@@ -649,7 +649,7 @@ enroll_msg_cb(FpiDeviceSynaptics *self,
 	{
 		case BMKT_RSP_ENROLL_READY:
 		{
-			self->enroll_progress = 0;
+			self->enroll_stage = 0;
 			fp_info("Place Finger on the Sensor!");
 			break;
 		}
@@ -664,16 +664,22 @@ enroll_msg_cb(FpiDeviceSynaptics *self,
 			fp_info("Enrollment is %d %% ", enroll_resp->progress);
 
 			done_stages = (enroll_resp->progress * ENROLL_SAMPLES + 99) / 100;
+			if (enroll_resp->progress < 100)
+				done_stages = MAX(done_stages, ENROLL_SAMPLES);
 
-			if (self->enroll_progress == enroll_resp->progress)
+			/* Emit a retry error if there has been no discernable
+			 * progress. Some firmware revisions report more required
+			 * touches. */
+			if (self->enroll_stage == done_stages)
 				fpi_device_enroll_progress (device,
 				                            done_stages,
 				                            NULL,
 				                            fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
-			else
-				fpi_device_enroll_progress (device, done_stages, NULL, NULL);
 
-			self->enroll_progress = enroll_resp->progress;
+			while (self->enroll_stage < done_stages) {
+				fpi_device_enroll_progress (device, done_stages, NULL, NULL);
+				self->enroll_stage += 1;
+			}
 			break;
 		}
 		case BMKT_RSP_ENROLL_PAUSED:

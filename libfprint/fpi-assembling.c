@@ -363,8 +363,8 @@ static void
 median_filter (int *data, int size, int filtersize)
 {
   int i;
-  int *result = (int *) g_malloc0 (size * sizeof (int));
-  int *sortbuf = (int *) g_malloc0 (filtersize * sizeof (int));
+  int *result = g_new0 (int, size);
+  int *sortbuf = g_new0 (int, filtersize);
 
   for (i = 0; i < size; i++)
     {

@@ -31,4 +31,7 @@ FpPrint * print_create_template (FpDevice *dev,
 gboolean print_image_save (FpPrint    *print,
                            const char *path);
 
+FpFinger finger_chooser (void);
+const char * finger_to_string (FpFinger finger);
+
 #endif /* __STORAGE_H */

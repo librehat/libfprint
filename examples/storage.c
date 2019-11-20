@@ -19,6 +19,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "libfprint/fp-print.h"
 #include <libfprint/fprint.h>
 
 #include <errno.h>

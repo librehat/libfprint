@@ -206,6 +206,11 @@ GSource * fpi_device_add_timeout (FpDevice     *device,
                                   gint          interval,
                                   FpTimeoutFunc func,
                                   gpointer      user_data);
+GSource * fpi_device_add_timeout_full (FpDevice      *device,
+                                       gint           interval,
+                                       FpTimeoutFunc  func,
+                                       gpointer       user_data,
+                                       GDestroyNotify destroy_notify);
 
 void fpi_device_set_nr_enroll_stages (FpDevice *device,
                                       gint      enroll_stages);

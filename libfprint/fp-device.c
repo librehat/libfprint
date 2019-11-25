@@ -824,6 +824,7 @@ fp_device_close (FpDevice           *device,
 
   priv->current_action = FP_DEVICE_ACTION_CLOSE;
   priv->current_task = g_steal_pointer (&task);
+  g_slist_free_full (priv->sources, (GDestroyNotify) g_source_destroy);
   maybe_cancel_on_cancelled (device, cancellable);
 
   FP_DEVICE_GET_CLASS (device)->close (device);

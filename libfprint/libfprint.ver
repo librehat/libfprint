@@ -4,6 +4,7 @@ global:
 
 	/* Needs to be public for the listing commands. */
 	fpi_get_driver_types;
+	fpi_*;
 local:
 	*;
 };

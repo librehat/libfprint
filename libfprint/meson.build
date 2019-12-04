@@ -183,6 +183,28 @@ mapfile = 'libfprint.ver'
 vflag = '-Wl,--version-script,@0@/@1@'.format(meson.current_source_dir(), mapfile)
 
 deps = [ mathlib_dep, glib_dep, gusb_dep, nss_dep, imaging_dep, gio_dep ]
+# libfprint_private = static_library('fprint-private',
+#     sources: libfprint_sources + fp_enums + fpi_enums + nbis_sources,
+#     c_args: common_cflags,
+#     include_directories: [
+#         root_inc,
+#         include_directories('nbis/include'),
+#     ],
+#     dependencies: deps,
+#     install: false)
+
+# libfprint = library('fprint',
+#     sources: ['fp-context.c'] + drivers_sources + other_sources,
+#     soversion: soversion,
+#     version: libversion,
+#     c_args: common_cflags + drivers_cflags,
+#     include_directories: root_inc,
+#     link_args : [vflag],
+#     link_depends : mapfile,
+#     link_with: libfprint_private,
+#     dependencies: deps,
+#     install: true)
+
 libfprint = library('fprint',
     libfprint_sources + fp_enums + fpi_enums +
         drivers_sources + nbis_sources + other_sources,
@@ -197,6 +219,7 @@ libfprint = library('fprint',
     link_depends : mapfile,
     dependencies: deps,
     install: true)
+libfprint_private = libfprint
 
 libfprint_dep = declare_dependency(link_with: libfprint,
     sources: [ fp_enums_h ],

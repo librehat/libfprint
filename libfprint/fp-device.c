@@ -515,7 +515,6 @@ fp_device_class_init (FpDeviceClass *klass)
   object_class->finalize = fp_device_finalize;
   object_class->get_property = fp_device_get_property;
   object_class->set_property = fp_device_set_property;
-
   properties[PROP_NR_ENROLL_STAGES] =
     g_param_spec_uint ("nr-enroll-stages",
                        "EnrollStages",
@@ -523,6 +522,7 @@ fp_device_class_init (FpDeviceClass *klass)
                        0, G_MAXUINT,
                        0,
                        G_PARAM_STATIC_STRINGS | G_PARAM_READABLE);
+g_print("Loading enroll stages for %p",properties[PROP_NR_ENROLL_STAGES]);
 
   properties[PROP_SCAN_TYPE] =
     g_param_spec_enum ("scan-type",
@@ -1446,6 +1446,7 @@ fpi_device_set_nr_enroll_stages (FpDevice *device,
   g_return_if_fail (FP_IS_DEVICE (device));
 
   priv->nr_enroll_stages = enroll_stages;
+  g_print("Settinge enroll stages to %d %p\n",enroll_stages,properties[PROP_NR_ENROLL_STAGES]);
   g_object_notify_by_pspec (G_OBJECT (device), properties[PROP_NR_ENROLL_STAGES]);
 }
 

@@ -5,7 +5,6 @@ envs.set('G_MESSAGES_DEBUG', 'all')
 
 # Setup paths
 envs.set('MESON_SOURCE_ROOT', meson.build_root())
-envs.prepend('GI_TYPELIB_PATH', join_paths(meson.build_root(), 'libfprint'))
 envs.prepend('LD_LIBRARY_PATH', join_paths(meson.build_root(), 'libfprint'))
 
 # Set FP_DEVICE_EMULATION so that drivers can adapt (e.g. to use fixed
@@ -15,6 +14,8 @@ envs.set('FP_DEVICE_EMULATION', '1')
 envs.set('NO_AT_BRIDGE', '1')
 
 if get_option('introspection')
+    envs.prepend('GI_TYPELIB_PATH', join_paths(meson.build_root(), 'libfprint'))
+
     if 'virtual_image' in drivers
         test('virtual-image',
             find_program('virtual-image.py'),
@@ -39,6 +40,26 @@ if get_option('introspection')
             depends: libfprint_typelib,
         )
     endforeach
+endif
+
+message(drivers)
+
+if 'virtual_image' in drivers
+    fpi_ssm_test = executable('fpi-ssm-test',
+        sources: 'fpi-ssm-test.c',
+        dependencies: [ libfprint_dep ],
+        include_directories: [
+            root_inc,
+            include_directories('../libfprint'),
+        ],
+        c_args: common_cflags,
+        link_with: libfprint_private)
+    test('fpi-ssm',
+        find_program('test-runner.sh'),
+        suite: ['unit-tests'],
+        args: [fpi_ssm_test],
+        env: envs,
+    )
 endif
 
 gdb = find_program('gdb', required: false)

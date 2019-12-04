@@ -156,10 +156,7 @@ if get_option('gtk-examples')
     subdir('demo')
 endif
 
-# The tests require introspeciton support to run
-if get_option('introspection')
-    subdir('tests')
-endif
+subdir('tests')
 
 pkgconfig = import('pkgconfig')
 pkgconfig.generate(

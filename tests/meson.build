@@ -51,6 +51,7 @@ if 'virtual_image' in drivers
 
     unit_tests = [
         'fp-context',
+        'fp-device',
     ]
 
     foreach test_name: unit_tests

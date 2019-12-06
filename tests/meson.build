@@ -44,7 +44,10 @@ endif
 
 if 'virtual_image' in drivers
     test_utils = static_library('fprint-test-utils',
-        sources: ['test-utils.c'],
+        sources: [
+            'test-utils.c',
+            'test-device-fake.c',
+        ],
         dependencies: libfprint_private_dep,
         install: false)
 

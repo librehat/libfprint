@@ -50,7 +50,9 @@ test_utils = static_library('fprint-test-utils',
     dependencies: libfprint_private_dep,
     install: false)
 
-unit_tests = []
+unit_tests = [
+    'fpi-device',
+]
 
 if 'virtual_image' in drivers
     unit_tests += [

@@ -20,7 +20,7 @@
 #define FP_COMPONENT "context"
 #include <fpi-log.h>
 
-#include "fpi-context.h"
+#include "fp-context-private.h"
 #include "fpi-device.h"
 #include <gusb.h>
 
@@ -35,18 +35,6 @@
  * The <link linkend="device-added">device-added</link> and device-removed signals allow you to handle devices
  * that may be hotplugged at runtime.
  */
-
-typedef struct
-{
-  GUsbContext  *usb_ctx;
-  GCancellable *cancellable;
-
-  gint          pending_devices;
-  gboolean      enumerated;
-
-  GArray       *drivers;
-  GPtrArray    *devices;
-} FpContextPrivate;
 
 G_DEFINE_TYPE_WITH_PRIVATE (FpContext, fp_context, G_TYPE_OBJECT)
 

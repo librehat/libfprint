@@ -219,7 +219,7 @@ on_delayed_action_cancelled (GCancellable *cancellable,
   g_clear_pointer (&machine->timeout, g_source_destroy);
 
   data = g_new0 (CancelledActionIdleData, 1);
-  data->cancellable = g_steal_pointer (&machine->cancellable);
+  data->cancellable = g_object_ref (machine->cancellable);
   data->cancellable_id = machine->cancellable_id;
   machine->cancellable_id = 0;
 
@@ -380,7 +380,11 @@ on_device_timeout_complete (FpDevice *dev,
 {
   FpiSsm *machine = user_data;
 
+  if (g_cancellable_is_cancelled (machine->cancellable))
+    return;
+
   machine->timeout = NULL;
+  // machine->completed = FALSE;
   fpi_ssm_mark_completed (machine);
 }
 
@@ -484,6 +488,9 @@ on_device_timeout_next_state (FpDevice *dev,
 {
   FpiSsm *machine = user_data;
 
+  if (g_cancellable_is_cancelled (machine->cancellable))
+    return;
+
   machine->timeout = NULL;
   fpi_ssm_next_state (machine);
 }
@@ -552,6 +559,9 @@ on_device_timeout_jump_to_state (FpDevice *dev,
                                  gpointer  user_data)
 {
   FpiSsmJumpToStateDelayedData *data = user_data;
+
+  if (g_cancellable_is_cancelled (data->machine->cancellable))
+    return;
 
   data->machine->timeout = NULL;
   fpi_ssm_jump_to_state (data->machine, data->next_state);

@@ -97,59 +97,51 @@ save_data (GVariant *data)
 int
 print_data_save (FpPrint *print, FpFinger finger)
 {
-  g_autofree gchar *descr = get_print_data_descriptor (print, NULL, finger);
-
   g_autoptr(GError) error = NULL;
   g_autoptr(GVariantDict) dict = NULL;
-  g_autofree guchar *data = NULL;
-  GVariant *val;
+  g_autofree gchar *data = NULL;
   gsize size;
-  int res;
 
   dict = load_data ();
 
-  fp_print_serialize (print, &data, &size, &error);
+  fp_print_serialize (print, (guchar **) &data, &size, &error);
   if (error)
     {
       g_warning ("Error serializing data: %s", error->message);
       return -1;
     }
-  val = g_variant_new_fixed_array (G_VARIANT_TYPE ("y"), data, size, 1);
-  g_variant_dict_insert_value (dict, descr, val);
 
-  res = save_data (g_variant_dict_end (dict));
+  g_file_set_contents (STORAGE_FILE, data, size, &error);
+  if (error)
+    {
+      g_warning ("Error saving serialized data: %s", error->message);
+      return -1;
+    }
 
-  return res;
+  return 0;
 }
 
 FpPrint *
 print_data_load (FpDevice *dev, FpFinger finger)
 {
-  g_autofree gchar *descr = get_print_data_descriptor (NULL, dev, finger);
-
-  g_autoptr(GVariant) val = NULL;
-  g_autoptr(GVariantDict) dict = NULL;
-  g_autofree guchar *stored_data = NULL;
+  g_autoptr(GError) error = NULL;
+  g_autofree gchar *stored_data = NULL;
+  FpPrint *print;
   gsize stored_len;
 
-  dict = load_data ();
-  val = g_variant_dict_lookup_value (dict, descr, G_VARIANT_TYPE ("ay"));
-
-  if (val)
+  g_file_get_contents (STORAGE_FILE, &stored_data, &stored_len, &error);
+  if (error)
     {
-      FpPrint *print;
-      g_autoptr(GError) error = NULL;
-
-      stored_data = (guchar *) g_variant_get_fixed_array (val, &stored_len, 1);
-      print = fp_print_deserialize (stored_data, stored_len, &error);
-
-      if (error)
-        g_warning ("Error deserializing data: %s", error->message);
-
-      return print;
+      g_warning ("Error reading serialized data: %s", error->message);
+      return NULL;
     }
 
-  return NULL;
+  print = fp_print_deserialize ((guchar *) stored_data, stored_len, &error);
+
+  if (error)
+    g_warning ("Error deserializing data: %s", error->message);
+
+  return print;
 }
 
 FpPrint *

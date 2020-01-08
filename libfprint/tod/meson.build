@@ -72,6 +72,10 @@ extra_libfprint_headers = [
     'drivers_api.h',
 ]
 
+drivers_sources += [
+    'tod-driver.c',
+]
+
 foreach header: libfprint_private_headers + extra_libfprint_headers
     tod_headers += '..' / header
 endforeach

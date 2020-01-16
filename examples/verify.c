@@ -187,8 +187,20 @@ on_list_completed (FpDevice *dev, GAsyncResult *res, gpointer user_data)
         {
           g_warning ("Did you remember to enroll your %s finger first?",
                      finger_to_string (verify_data->finger));
-          verify_quit (dev, verify_data);
-          return;
+          // verify_quit (dev, verify_data);
+          // return;
+          verify_print = print_create_template (dev, FP_FINGER_FIRST);
+          int finger = 1;
+
+          GVariant *uid = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE,
+                                                     "foooBAR-BAZ",
+                                                     11,
+                                                     1);
+          GVariant *data = g_variant_new ("(y@ay)",
+                                          finger,
+                                          uid);
+          g_object_set (verify_print, "fpi-data", data, NULL);
+          fp_print_set_description (verify_print, "Foo print description");
         }
 
       g_debug ("Comparing print with %s",

@@ -546,7 +546,6 @@ test_driver_enroll_progress (void)
 typedef struct
 {
   gboolean called;
-  gboolean success;
   FpPrint *match;
   FpPrint *print;
   GError  *error;
@@ -556,7 +555,6 @@ static void
 test_driver_match_data_clear (MatchCbData *data)
 {
   data->called = FALSE;
-  data->success = FALSE;
   g_clear_object (&data->match);
   g_clear_object (&data->print);
   g_clear_error (&data->error);
@@ -564,7 +562,6 @@ test_driver_match_data_clear (MatchCbData *data)
 
 static void
 test_driver_match_cb (FpDevice *device,
-                      gboolean  success,
                       FpPrint  *match,
                       FpPrint  *print,
                       gpointer  user_data,
@@ -574,7 +571,6 @@ test_driver_match_cb (FpDevice *device,
 
   g_assert (data->called == FALSE);
   data->called = TRUE;
-  data->success = TRUE;
   if (match)
     data->match = g_object_ref (match);
   if (print)
@@ -582,16 +578,8 @@ test_driver_match_cb (FpDevice *device,
   if (error)
     data->error = g_error_copy (error);
 
-  if (success)
-    {
-      g_assert_null (error);
-    }
-  else
-    {
-      g_assert_nonnull (error);
-      g_assert_null (match);
-      g_assert_null (print);
-    }
+  if (match)
+    g_assert_no_error (error);
 }
 
 static void
@@ -616,7 +604,7 @@ test_driver_verify (void)
   g_assert_no_error (error);
 
   g_assert_true (match_data.called);
-  g_assert_true (match_data.success);
+  g_assert_nonnull (match_data.match);
   g_assert_true (match_data.print == out_print);
   g_assert_true (match_data.match == enrolled_print);
 
@@ -647,7 +635,7 @@ test_driver_verify_fail (void)
   g_assert_no_error (error);
 
   g_assert_true (match_data.called);
-  g_assert_true (match_data.success);
+  g_assert_no_error (match_data.error);
   g_assert_true (match_data.print == out_print);
   g_assert_null (match_data.match);
 
@@ -676,6 +664,7 @@ test_driver_verify_retry (void)
                          &match, &out_print, &error);
 
   g_assert_true (match_data.called);
+  g_assert_null (match_data.match);
   g_assert_error (match_data.error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_GENERAL);
 
   g_assert (fake_dev->last_called_function == dev_class->verify);
@@ -705,6 +694,8 @@ test_driver_verify_error (void)
                          &match, &out_print, &error);
 
   g_assert_false (match_data.called);
+  g_assert_null (match_data.match);
+  g_assert_no_error (match_data.error);
 
   g_assert (fake_dev->last_called_function == dev_class->verify);
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);
@@ -803,7 +794,7 @@ test_driver_identify (void)
                            &matched_print, &print, &error);
 
   g_assert_true (match_data.called);
-  g_assert_true (match_data.success);
+  g_assert_nonnull (match_data.match);
   g_assert_true (match_data.match == matched_print);
   g_assert_true (match_data.print == print);
 
@@ -841,7 +832,8 @@ test_driver_identify_fail (void)
                            &matched_print, &print, &error);
 
   g_assert_true (match_data.called);
-  g_assert_true (match_data.success);
+  g_assert_null (match_data.match);
+  g_assert_no_error (match_data.error);
   g_assert_true (match_data.match == matched_print);
   g_assert_true (match_data.print == print);
 
@@ -882,6 +874,7 @@ test_driver_identify_retry (void)
                            &matched_print, &print, &error);
 
   g_assert_true (match_data.called);
+  g_assert_null (match_data.match);
   g_assert_error (match_data.error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_GENERAL);
 
   g_assert (fake_dev->last_called_function == dev_class->identify);
@@ -921,6 +914,8 @@ test_driver_identify_error (void)
                            &matched_print, &print, &error);
 
   g_assert_false (match_data.called);
+  g_assert_null (match_data.match);
+  g_assert_no_error (match_data.error);
 
   g_assert (fake_dev->last_called_function == dev_class->identify);
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);

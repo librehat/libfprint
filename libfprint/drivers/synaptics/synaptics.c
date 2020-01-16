@@ -634,7 +634,10 @@ verify_msg_cb (FpiDeviceSynaptics *self,
         {
           fp_warn ("Verify has failed: %d", resp->result);
           fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-          fpi_device_verify_complete (device, NULL);
+          fpi_device_verify_complete (device,
+                                      fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                                "Unexpected result from device %d",
+                                                                resp->result));
         }
       break;
 

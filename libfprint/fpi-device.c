@@ -962,6 +962,14 @@ fpi_device_verify_complete (FpDevice *device,
       if (!data->result_reported)
         {
           g_warning ("Driver reported successful verify complete but did not report the result earlier. Reporting error instead");
+
+          // if (data->match_cb)
+          //   {
+          //     g_assert_no_error (data->error);
+          //     data->error = fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
+          //     data->match_cb (device, FALSE, NULL, NULL, data->match_data, data->error);
+          //   }
+
           fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR,
                                           fpi_device_error_new (FP_DEVICE_ERROR_GENERAL));
         }
@@ -977,6 +985,15 @@ fpi_device_verify_complete (FpDevice *device,
     }
   else
     {
+      // if (!data->result_reported && data->match_cb)
+      //   {
+      //     g_assert_no_error (data->error);
+      //     data->error = error->domain == FP_DEVICE_RETRY ?
+      //                   g_error_copy (error) : fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
+      //     data->match_cb (device, FALSE, NULL, NULL, data->match_data,
+      //                     fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
+      //   }
+
       /* Replace a retry error with a general error, this is a driver bug. */
       if (error->domain == FP_DEVICE_RETRY)
         {

@@ -16,6 +16,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fpi-device.h"
+#include "fpi-print.h"
 #define FP_COMPONENT "synaptics"
 
 #include "drivers_api.h"
@@ -285,11 +287,9 @@ cmd_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
     }
   else if (self->cmd_complete_on_removal)
     {
-      callback (self, NULL, self->cmd_complete_error);
-      self->cmd_complete_error = NULL;
+      callback (self, NULL, NULL);
     }
   self->cmd_complete_on_removal = FALSE;
-  g_clear_pointer (&self->cmd_complete_error, g_error_free);
 }
 
 static void
@@ -583,6 +583,26 @@ list (FpDevice *device)
 }
 
 static void
+report_finger_delayed_verify (FpiDeviceSynaptics *self,
+                              FpiMatchResult      result,
+                              GError             *error)
+{
+  FpDevice *device = FP_DEVICE (self);
+
+  fpi_device_verify_report (device, result, NULL, error);
+
+  if (self->finger_on_sensor)
+    {
+      fp_dbg ("delaying verify report until after finger removal!");
+      self->cmd_complete_on_removal = TRUE;
+    }
+  else
+    {
+      fpi_device_verify_complete (device, error);
+    }
+}
+
+static void
 verify_msg_cb (FpiDeviceSynaptics *self,
                bmkt_response_t    *resp,
                GError             *error)
@@ -619,21 +639,19 @@ verify_msg_cb (FpiDeviceSynaptics *self,
     case BMKT_RSP_VERIFY_FAIL:
       if(resp->result == BMKT_SENSOR_STIMULUS_ERROR)
         {
-          fp_dbg ("delaying retry error until after finger removal!");
-          self->cmd_complete_on_removal = TRUE;
-          self->cmd_complete_data = GINT_TO_POINTER (FPI_MATCH_ERROR);
-          self->cmd_complete_error = fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
+          fp_info ("Match error occurred");
+          report_finger_delayed_verify (self, FPI_MATCH_ERROR,
+                                        fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
         }
       else if (resp->result == BMKT_FP_NO_MATCH)
         {
-          fp_dbg ("delaying match failure until after finger removal!");
-          self->cmd_complete_on_removal = TRUE;
-          self->cmd_complete_data = GINT_TO_POINTER (FPI_MATCH_FAIL);
-          self->cmd_complete_error = NULL;
+          fp_info ("Print didn't match");
+          report_finger_delayed_verify (self, FPI_MATCH_FAIL, NULL);
         }
-      else if (BMKT_FP_DATABASE_NO_RECORD_EXISTS)
+      else if (resp->result == BMKT_FP_DATABASE_NO_RECORD_EXISTS)
         {
           fp_info ("Print is not in database");
+          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
           fpi_device_verify_complete (device,
                                       fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
         }

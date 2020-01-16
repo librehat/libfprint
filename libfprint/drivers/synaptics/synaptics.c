@@ -624,6 +624,7 @@ verify_msg_cb (FpiDeviceSynaptics *self,
       else if (resp->result == BMKT_FP_DATABASE_NO_RECORD_EXISTS)
         {
           fp_info ("Print is not in database");
+          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
           fpi_device_verify_complete (device,
                                       fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
         }

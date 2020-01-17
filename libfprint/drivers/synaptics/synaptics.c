@@ -578,7 +578,8 @@ list (FpDevice *device)
 static void
 report_finger_removal_delayed_verify (FpiDeviceSynaptics *self,
                                       FpiMatchResult      result,
-                                      GError             *error)
+                                      GError             *error,
+                                      GError             *complete_error)
 {
   FpDevice *device = FP_DEVICE (self);
 
@@ -588,10 +589,11 @@ report_finger_removal_delayed_verify (FpiDeviceSynaptics *self,
     {
       fp_dbg ("delaying verify report until after finger removal!");
       self->cmd_complete_on_removal = TRUE;
+      self->cmd_complete_error = complete_error;
     }
   else
     {
-      fpi_device_verify_complete (device, NULL);
+      fpi_device_verify_complete (device, complete_error);
     }
 }
 
@@ -644,26 +646,23 @@ verify_msg_cb (FpiDeviceSynaptics *self,
       else if (resp->result == BMKT_FP_DATABASE_NO_RECORD_EXISTS)
         {
           fp_info ("Print is not in database");
-          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-          fpi_device_verify_complete (device,
-                                      fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
+          report_finger_removal_delayed_verify (self, FPI_MATCH_FAIL,
+                                                fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
         }
       else
         {
           fp_warn ("Verify has failed: %d", resp->result);
-          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
-          fpi_device_verify_complete (device,
-                                      fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
-                                                                "Unexpected result from device %d",
-                                                                resp->result));
+          report_finger_removal_delayed_verify (self, FPI_MATCH_FAIL,
+                                                fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                                          "Unexpected result from device %d",
+                                                                          resp->result));
         }
       break;
 
     case BMKT_RSP_VERIFY_OK:
       fp_info ("Verify was successful! for user: %s finger: %d score: %f",
                verify_resp->user_id, verify_resp->finger_id, verify_resp->match_result);
-      fpi_device_verify_report (device, FPI_MATCH_SUCCESS, NULL, NULL);
-      fpi_device_verify_complete (device, NULL);
+      report_finger_removal_delayed_verify (self, FPI_MATCH_SUCCESS, NULL);
       break;
     }
 }

@@ -29,3 +29,8 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (GParamSpec, g_param_spec_unref);
 #if !GLIB_CHECK_VERSION (2, 58, 0)
 #define G_SOURCE_FUNC(f) ((GSourceFunc) (void (*)(void))(f))
 #endif
+
+#elif !GLIB_CHECK_VERSION (2, 63, 3)
+typedef struct _FpDeviceClass FpDeviceClass;
+G_DEFINE_AUTOPTR_CLEANUP_FUNC (FpDeviceClass, g_type_class_unref);
+#endif

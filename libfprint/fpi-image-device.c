@@ -126,6 +126,22 @@ fp_image_device_enroll_maybe_await_finger_on (FpImageDevice *self)
     }
 }
 
+void fpi_image_device_verify_complete(FpImageDevice  *self,
+                          FpiMatchResult  result,
+                          FpPrint        *print,
+                          GError         *error)
+{
+  FpDevice *device = FP_DEVICE (self);
+
+  if (!error || error->domain == FP_DEVICE_RETRY)
+    fpi_device_verify_report (device, result, g_steal_pointer (&print), g_steal_pointer (&error));
+
+  fpi_device_verify_complete (device, error);
+  fpi_image_device_deactivate (self);
+
+  g_clear_object (&print);
+}
+
 static void
 fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, gpointer user_data)
 {
@@ -210,10 +226,8 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       else
         result = FPI_MATCH_ERROR;
 
-      if (!error || error->domain == FP_DEVICE_RETRY)
-        fpi_device_verify_report (device, result, g_steal_pointer (&print), g_steal_pointer (&error));
-      fpi_device_verify_complete (device, error);
-      fpi_image_device_deactivate (self);
+      FP_IMAGE_DEVICE_GET_CLASS (self)->handle_verify (self,
+        result, g_steal_pointer (&print), g_steal_pointer (&error));
     }
   else if (action == FPI_DEVICE_ACTION_IDENTIFY)
     {

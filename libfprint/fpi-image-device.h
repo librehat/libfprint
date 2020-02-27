@@ -90,6 +90,10 @@ struct _FpImageDeviceClass
   void          (*img_open)     (FpImageDevice *dev);
   void          (*img_close)    (FpImageDevice *dev);
   void          (*activate)     (FpImageDevice *dev);
+  void          (*handle_verify) (FpImageDevice  *dev,
+                                  FpiMatchResult  result,
+                                  FpPrint        *print,
+                                  GError         *error);
   void          (*change_state) (FpImageDevice      *dev,
                                  FpiImageDeviceState state);
   void          (*deactivate)   (FpImageDevice *dev);
@@ -109,6 +113,10 @@ void fpi_image_device_activate_complete (FpImageDevice *self,
                                          GError        *error);
 void fpi_image_device_deactivate_complete (FpImageDevice *self,
                                            GError        *error);
+void fpi_image_device_verify_complete(FpImageDevice  *self,
+                          FpiMatchResult  result,
+                          FpPrint        *print,
+                          GError         *error);
 
 void fpi_image_device_report_finger_status (FpImageDevice *self,
                                             gboolean       present);

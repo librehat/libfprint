@@ -226,6 +226,15 @@ fp_image_device_default_deactivate (FpImageDevice *self)
 }
 
 static void
+fp_image_device_default_handle_verify (FpImageDevice *self,
+FpiMatchResult  result,
+                          FpPrint        *print,
+                          GError         *error)
+{
+  fpi_image_device_verify_complete (self, result, print, error);
+}
+
+static void
 fp_image_device_get_property (GObject    *object,
                               guint       prop_id,
                               GValue     *value,
@@ -284,6 +293,7 @@ fp_image_device_class_init (FpImageDeviceClass *klass)
   /* Default implementations */
   klass->activate = fp_image_device_default_activate;
   klass->deactivate = fp_image_device_default_deactivate;
+  klass->handle_verify = fp_image_device_default_handle_verify;
 
   /**
    * FpImageDevice::fpi-image-device-state: (skip)

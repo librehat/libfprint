@@ -1,0 +1,9 @@
+{
+global:
+    fp_*;
+    fpi_*;
+    fprint_*;
+    FP_*;
+local:
+    *;
+};

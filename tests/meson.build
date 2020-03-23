@@ -20,6 +20,7 @@ drivers_tests = [
     'elan',
     'vfs5011',
     'synaptics',
+    'goodixmoc',
 ]
 
 if get_option('introspection')

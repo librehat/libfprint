@@ -161,6 +161,12 @@ foreach driver: drivers
         'drivers/synaptics/bmkt_message.c',
     ]
     endif
+    if driver == 'goodixmoc'
+    drivers_sources += [
+        'drivers/goodix/goodix.c',
+        'drivers/goodix/goodix_proto.c',
+    ]
+    endif
 endforeach
 
 if aeslib

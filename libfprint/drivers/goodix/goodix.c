@@ -324,6 +324,7 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
                       GError             *error)
 {
   FpDevice *device = FP_DEVICE (self);
+  GError *error_msg = NULL;
 
   if (error)
     {
@@ -333,31 +334,33 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
   if (resp->result >= GX_FAILED)
     {
       fp_dbg ("Capture sample failed, result: 0x%x", resp->result);
-      fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL,
-                                fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
-      fpi_device_verify_complete (device, NULL);
-      return;
+      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
+      goto failed;
     }
 
   if (resp->capture_data_resp.img_quality <= 0)
     {
 
       fp_dbg ("Catpure sample poor quality(0): %d", resp->capture_data_resp.img_quality);
-      fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL,
-                                fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER));
-      fpi_device_verify_complete (device, NULL);
-      return;
+      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER);
+      goto failed;
     }
   if (resp->capture_data_resp.img_coverage < 35)
     {
       fp_dbg ("Catpure sample poor coverage(35): %d", resp->capture_data_resp.img_coverage);
-      fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL,
-                                fpi_device_retry_new (FP_DEVICE_RETRY_TOO_SHORT));
-      fpi_device_verify_complete (device, NULL);
-      return;
+      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_TOO_SHORT);
+      goto failed;
     }
-  fpi_ssm_next_state (self->task_ssm);
-
+failed:
+  if (error_msg)
+    {
+      fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL, error_msg);
+      fpi_ssm_mark_completed (self->task_ssm);
+    }
+  else
+    {
+      fpi_ssm_next_state (self->task_ssm);
+    }
 }
 
 static void
@@ -369,28 +372,27 @@ fp_verify_identify_cb (FpiDeviceGoodixMoc *self,
 
   if (error)
     {
-      fpi_device_verify_complete (device, error);
+      fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
   if (!resp->verify.match)
     {
       fp_warn ("Verify not match");
       fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
-      fpi_device_verify_complete (device, NULL);
-      return;
     }
-  if (memcmp (&resp->verify.template.tid, &self->template_id, TEMPLATE_ID_SIZE) != 0)
+  else if (memcmp (&resp->verify.template.tid, &self->template_id, TEMPLATE_ID_SIZE) != 0)
     {
       fp_warn ("Verify match, but template id not match");
       fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
-      fpi_device_verify_complete (device, NULL);
-      return;
+    }
+  else
+    {
+      fp_info ("Verify successful! for user: %s finger: %d",
+               resp->verify.template.payload.data, resp->verify.template.finger_index);
+      fpi_device_verify_report (device, FPI_MATCH_SUCCESS, NULL, NULL);
     }
 
-  fp_info ("Verify successful! for user: %s finger: %d",
-           resp->verify.template.payload.data, resp->verify.template.finger_index);
-  fpi_device_verify_report (device, FPI_MATCH_SUCCESS, NULL, NULL);
-  fpi_device_verify_complete (device, NULL);
+  fpi_ssm_mark_completed (self->task_ssm);
 
 }
 
@@ -429,18 +431,15 @@ static void
 fp_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
   FpiDeviceGoodixMoc *self = FPI_DEVICE_GOODIXMOC (dev);
-  FpPrint *print = NULL;
 
   if (error)
     {
-      fpi_device_enroll_complete (dev, NULL, error);
+      fpi_device_verify_complete (dev, error);
       return;
     }
   fp_info ("Verify complete!");
 
-  fpi_device_get_enroll_data (FP_DEVICE (self), &print);
-
-  fpi_device_enroll_complete (FP_DEVICE (self), g_object_ref (print), NULL);
+  fpi_device_verify_complete (dev, NULL);
 
   self->task_ssm = NULL;
 }

@@ -185,6 +185,9 @@ const gchar *fpi_device_get_virtual_env (FpDevice *device);
 FpiDeviceAction fpi_device_get_current_action (FpDevice *device);
 gboolean fpi_device_action_is_cancelled (FpDevice *device);
 
+gboolean fpi_device_report_finger_status (FpDevice *device,
+                                          gboolean  present);
+
 GError * fpi_device_retry_new (FpDeviceRetry error);
 GError * fpi_device_error_new (FpDeviceError error);
 

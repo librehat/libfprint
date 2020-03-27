@@ -234,7 +234,8 @@ on_device_opened (FpDevice     *dev,
   if (!fp_device_has_storage (dev))
     {
       g_warning ("Device %s doesn't support storage", fp_device_get_name (dev));
-      g_main_loop_quit (list_data->loop);
+      fp_device_close (dev, NULL, (GAsyncReadyCallback) on_device_closed,
+                       list_data);
       return;
     }
 

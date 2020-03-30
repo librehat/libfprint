@@ -29,6 +29,7 @@
 
 #define TEMPLATE_ID_SIZE (32)
 
+#define GX_VERSION_LEN (8)
 
 /* Type covert */
 #define MAKE_CMD_EX(cmd0, cmd1)    ((uint16_t) (((cmd0) << 8) | (cmd1)))
@@ -72,15 +73,15 @@
 typedef struct _fp_version_info
 {
   uint8_t format[2];
-  uint8_t fwtype[8];
-  uint8_t fwversion[8];
-  uint8_t customer[8];
-  uint8_t mcu[8];
-  uint8_t sensor[8];
-  uint8_t algversion[8];
-  uint8_t interface[8];
-  uint8_t protocol[8];
-  uint8_t flashVersion[8];
+  uint8_t fwtype[GX_VERSION_LEN];
+  uint8_t fwversion[GX_VERSION_LEN];
+  uint8_t customer[GX_VERSION_LEN];
+  uint8_t mcu[GX_VERSION_LEN];
+  uint8_t sensor[GX_VERSION_LEN];
+  uint8_t algversion[GX_VERSION_LEN];
+  uint8_t interface[GX_VERSION_LEN];
+  uint8_t protocol[GX_VERSION_LEN];
+  uint8_t flashVersion[GX_VERSION_LEN];
   uint8_t reserved[62];
 } fp_version_info_t, *pfp_version_info_t;
 

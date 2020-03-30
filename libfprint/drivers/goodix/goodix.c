@@ -113,18 +113,18 @@ fp_cmd_recieve_cb (FpiUsbTransfer *transfer,
   ret = gx_proto_parse_header (transfer->buffer, transfer->actual_length, &header);
   if (ret != 0)
     {
-      fp_warn ("Corrupted message received");
       fpi_ssm_mark_failed (transfer->ssm,
-                           fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Corrupted message received"));
       return;
     }
 
   gx_proto_crc32_calc (transfer->buffer, PACKAGE_HEADER_SIZE + header.len, (uint8_t *) &crc32_calc);
   if(crc32_calc != *(uint32_t *) (transfer->buffer + PACKAGE_HEADER_SIZE + header.len))
     {
-      fp_warn ("Package crc check failed!");
       fpi_ssm_mark_failed (transfer->ssm,
-                           fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Package crc check failed"));
       return;
     }
 
@@ -133,9 +133,9 @@ fp_cmd_recieve_cb (FpiUsbTransfer *transfer,
   ret = gx_proto_parse_body (cmd, &transfer->buffer[PACKAGE_HEADER_SIZE], header.len, &cmd_reponse);
   if (ret != 0)
     {
-      fp_warn ("Corrupted message received");
       fpi_ssm_mark_failed (transfer->ssm,
-                           fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Corrupted message received"));
       return;
     }
   /* ack */
@@ -143,9 +143,11 @@ fp_cmd_recieve_cb (FpiUsbTransfer *transfer,
     {
       if (data->cmd != cmd_reponse.parse_msg.ack_cmd)
         {
-          fp_warn ("Not expected response, got 0x%x", cmd_reponse.parse_msg.ack_cmd);
           fpi_ssm_mark_failed (transfer->ssm,
-                               fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+                               fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                         "Not expected response, got 0x%x",
+                                                         cmd_reponse.parse_msg.ack_cmd));
+
           return;
         }
       fpi_ssm_next_state (transfer->ssm);
@@ -154,12 +156,12 @@ fp_cmd_recieve_cb (FpiUsbTransfer *transfer,
   /* data */
   if (data->cmd != header.cmd0)
     {
-      fp_warn ("Not expected cmd, got 0x%x", header.cmd0);
       fpi_ssm_mark_failed (transfer->ssm,
-                           fpi_device_error_new (FP_DEVICE_ERROR_PROTO));
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Not expected cmd, got 0x%x",
+                                                     header.cmd0));
       return;
     }
-  fp_dbg ("Received(cmd: 0x%x) data", data->cmd);   //TODO: debug info remove if release
   if (data->callback)
     data->callback (self, &cmd_reponse, NULL);
 
@@ -212,7 +214,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
       if (self->cmd_cancelable)
         {
           fpi_usb_transfer_submit (transfer,
-                                   DATA_TIMEOUT,
+                                   0,
                                    self->cancellable,
                                    fp_cmd_recieve_cb,
                                    fpi_ssm_get_data (ssm));
@@ -220,7 +222,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
       else
         {
           fpi_usb_transfer_submit (transfer,
-                                   0,
+                                   DATA_TIMEOUT,
                                    NULL,
                                    fp_cmd_recieve_cb,
                                    fpi_ssm_get_data (ssm));
@@ -241,8 +243,12 @@ fp_cmd_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   self->cmd_ssm = NULL;
   /* Notify about the SSM failure from here instead. */
   if (error)
-    if (data->callback)
-      data->callback (self, NULL, error);
+    {
+      if (data->callback)
+        data->callback (self, NULL, error);
+      else
+        g_error_free (error);
+    }
   self->cmd_cancelable = FALSE;
 }
 
@@ -254,7 +260,8 @@ alloc_cmd_transfer (FpDevice     *dev,
                     guint16       data_len)
 {
   gint ret = -1;
-  FpiUsbTransfer *transfer = fpi_usb_transfer_new (dev);
+
+  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (dev);
 
   guint32 total_len = data_len + PACKAGE_HEADER_SIZE + PACKAGE_CRC_SIZE;
 
@@ -273,7 +280,7 @@ alloc_cmd_transfer (FpDevice     *dev,
       return NULL;
     }
 
-  return transfer;
+  return g_steal_pointer (&transfer);
 }
 
 static void
@@ -292,7 +299,8 @@ goodix_sensor_cmd (FpiDeviceGoodixMoc *self,
                    SynCmdMsgCallback   callback)
 {
 
-  FpiUsbTransfer *transfer;
+  g_autoptr(FpiUsbTransfer) transfer = NULL;
+
   CommandData *data = g_new0 (CommandData, 1);
 
   transfer = alloc_cmd_transfer (FP_DEVICE (self), cmd0, cmd1, payload, payload_len);
@@ -338,17 +346,13 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
       goto failed;
     }
 
-  if (resp->capture_data_resp.img_quality <= 0)
+  if ((resp->capture_data_resp.img_quality <= 0) || (resp->capture_data_resp.img_coverage < 35))
     {
 
-      fp_dbg ("Catpure sample poor quality(0): %d", resp->capture_data_resp.img_quality);
+      fp_dbg ("Catpure sample poor quality: %d or poor coverage: %d",
+              resp->capture_data_resp.img_quality,
+              resp->capture_data_resp.img_coverage);
       error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER);
-      goto failed;
-    }
-  if (resp->capture_data_resp.img_coverage < 35)
-    {
-      fp_dbg ("Catpure sample poor coverage(35): %d", resp->capture_data_resp.img_coverage);
-      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_TOO_SHORT);
       goto failed;
     }
 failed:
@@ -432,14 +436,9 @@ fp_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
   FpiDeviceGoodixMoc *self = FPI_DEVICE_GOODIXMOC (dev);
 
-  if (error)
-    {
-      fpi_device_verify_complete (dev, error);
-      return;
-    }
   fp_info ("Verify complete!");
 
-  fpi_device_verify_complete (dev, NULL);
+  fpi_device_verify_complete (dev, error);
 
   self->task_ssm = NULL;
 }
@@ -459,8 +458,7 @@ generate_user_id (FpPrint *print)
   gint y = 0, m = 0, d = 0;
   gint32 rand_id = 0;
 
-  if(!print)
-    return NULL;
+  g_assert (print);
   date = fp_print_get_enroll_date (print);
   if (date && g_date_valid (date))
     {
@@ -500,22 +498,14 @@ encode_finger_id (
   guint8 * buffer = NULL;
   guint16 offset = 0;
 
-  if (!tid ||
-      !fid ||
-      !fid_len)
-    {
-      fp_err ("Invalid parameters!");
-      return FALSE;
-    }
+  g_return_val_if_fail (tid != NULL, FALSE);
+  g_return_val_if_fail (uid != NULL, FALSE);
+  g_return_val_if_fail (fid != NULL, FALSE);
+  g_return_val_if_fail (fid_len != NULL, FALSE);
 
   *fid_len = (guint16) (70 + uid_len);  // must include fingerid length
 
   *fid = (guint8 *) g_malloc0 (*fid_len + 2);
-  if (!(*fid))
-    {
-      fp_err ("fid galloc failed!");
-      return FALSE;
-    }
 
   buffer = *fid;
   offset = 0;
@@ -841,7 +831,7 @@ fp_init_version_cb (FpiDeviceGoodixMoc *self,
                     fp_cmd_response_t  *resp,
                     GError             *error)
 {
-  gchar *nullstring = NULL;
+  char nullstring[GX_VERSION_LEN + 1] = { 0 };
 
   if (error)
     {
@@ -849,14 +839,17 @@ fp_init_version_cb (FpiDeviceGoodixMoc *self,
       return;
     }
 
-  nullstring = g_malloc0 (10);
+  G_STATIC_ASSERT (sizeof (resp->version_info.fwtype) == 8);
+  G_STATIC_ASSERT (sizeof (resp->version_info.algversion) == 8);
+  G_STATIC_ASSERT (sizeof (resp->version_info.fwversion) == 8);
+
   memcpy (nullstring, resp->version_info.fwtype, sizeof (resp->version_info.fwtype));
   fp_info ("Firmware type: %s", nullstring);
   memcpy (nullstring, resp->version_info.algversion, sizeof (resp->version_info.algversion));
-  fp_info ("Algversion version:%s", nullstring);
+  fp_info ("Algversion version: %s", nullstring);
   memcpy (nullstring, resp->version_info.fwversion, sizeof (resp->version_info.fwversion));
   fp_info ("Firmware version: %s", nullstring);
-  g_free (nullstring);
+
   fpi_ssm_next_state (self->task_ssm);
 }
 
@@ -879,7 +872,7 @@ static void
 fp_init_sm_run_state (FpiSsm *ssm, FpDevice *device)
 {
   FpiDeviceGoodixMoc *self = FPI_DEVICE_GOODIXMOC (device);
-  guint8 dummy;
+  guint8 dummy = 0;
 
   switch (fpi_ssm_get_cur_state (ssm))
     {
@@ -1146,15 +1139,18 @@ gx_fp_probe (FpDevice *device)
       serial = g_usb_device_get_string_descriptor (usb_dev,
                                                    g_usb_device_get_serial_number_index (usb_dev),
                                                    &error);
-      g_assert (serial);
+      if (!serial)
+        {
+          g_usb_device_release_interface (fpi_device_get_usb_device (FP_DEVICE (device)),
+                                          0, 0, NULL);
+          goto err_close;
+        }
       if (!g_str_has_suffix (serial, "B0"))
         {
           fp_warn ("Device not support");
           g_usb_device_release_interface (fpi_device_get_usb_device (FP_DEVICE (device)),
-                                          0, 0, &error);
-          g_usb_device_close (usb_dev, NULL);
-          fpi_device_probe_complete (device, NULL, NULL, fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED));
-          return;
+                                          0, 0, NULL);
+          goto err_close;
         }
     }
   g_usb_device_release_interface (fpi_device_get_usb_device (FP_DEVICE (device)),
@@ -1178,7 +1174,10 @@ gx_fp_init (FpDevice *device)
 
   int ret = gx_proto_init_sensor_config (self->sensorcfg);
   if(ret != 0)
-    goto err_close;
+    {
+      error = fpi_device_error_new_msg (FP_DEVICE_ERROR_GENERAL, "Init sensor failed");
+      goto err_close;
+    }
 
   if (!g_usb_device_reset (fpi_device_get_usb_device (device), &error))
     goto err_close;
@@ -1312,7 +1311,7 @@ gx_fp_template_delete (FpDevice *device)
                                   fpi_device_error_new (FP_DEVICE_ERROR_DATA_INVALID));
       return;
     }
-  if(!encode_finger_id (tid, tid_len, user_id, user_id_len, &payload, (guint16 *) &payload_len))
+  if (!encode_finger_id (tid, tid_len, user_id, user_id_len, &payload, (guint16 *) &payload_len))
     {
       fpi_device_delete_complete (device,
                                   fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,

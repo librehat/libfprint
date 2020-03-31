@@ -974,7 +974,7 @@ fp_template_delete_cb (FpiDeviceGoodixMoc *self,
       fpi_device_delete_complete (device, error);
       return;
     }
-  if (resp->result >= GX_FAILED)
+  if ((resp->result >= GX_FAILED) && (resp->result != GX_ERROR_FINGER_ID_NOEXIST))
     {
       fpi_device_delete_complete (FP_DEVICE (self),
                                   fpi_device_error_new_msg (FP_DEVICE_ERROR_GENERAL,

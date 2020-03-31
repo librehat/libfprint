@@ -42,6 +42,8 @@
 /* Error code */
 #define GX_SUCCESS 0x00
 #define GX_FAILED 0x80
+#define GX_ERROR_FINGER_ID_NOEXIST 0x9C
+#define GX_ERROR_TEMPLATE_INCOMPLETE 0xB8
 
 /* Command Type Define */
 #define RESPONSE_PACKAGE_CMD 0xAA

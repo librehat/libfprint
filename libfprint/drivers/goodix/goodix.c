@@ -76,7 +76,7 @@ typedef struct
  *
  *****************************************************************************/
 static void
-fp_cmd_recieve_cb (FpiUsbTransfer *transfer,
+fp_cmd_receive_cb (FpiUsbTransfer *transfer,
                    FpDevice       *device,
                    gpointer        user_data,
                    GError         *error)
@@ -202,7 +202,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
       fpi_usb_transfer_submit (transfer,
                                ACK_TIMEOUT,
                                NULL,
-                               fp_cmd_recieve_cb,
+                               fp_cmd_receive_cb,
                                fpi_ssm_get_data (ssm));
 
       break;
@@ -216,7 +216,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
           fpi_usb_transfer_submit (transfer,
                                    0,
                                    self->cancellable,
-                                   fp_cmd_recieve_cb,
+                                   fp_cmd_receive_cb,
                                    fpi_ssm_get_data (ssm));
         }
       else
@@ -224,7 +224,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
           fpi_usb_transfer_submit (transfer,
                                    DATA_TIMEOUT,
                                    NULL,
-                                   fp_cmd_recieve_cb,
+                                   fp_cmd_receive_cb,
                                    fpi_ssm_get_data (ssm));
 
         }
@@ -587,7 +587,7 @@ fp_enroll_capture_cb (FpiDeviceGoodixMoc *self,
       (resp->capture_data_resp.img_coverage < self->sensorcfg->config[5])
      )
     {
-      fp_warn ("Capture sample poor qulity(%d): %d or coverage(%d): %d",
+      fp_warn ("Capture sample poor quality(%d): %d or coverage(%d): %d",
                self->sensorcfg->config[4],
                resp->capture_data_resp.img_quality,
                self->sensorcfg->config[5],

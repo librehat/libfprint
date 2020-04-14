@@ -287,12 +287,12 @@ gx_proto_parse_body (uint16_t cmd, uint8_t *buffer, uint32_t buffer_len, pfp_cmd
   uint32_t offset = 0;
   uint8_t *fingerlist = NULL;
 
-  //TODO: need add check data vaild and length
+  //TODO: need add check data valid and length
   if (!buffer || !presp)
-    //g_warning("invaild argument");
+    //g_warning("invalid argument");
     return -1;
   if (buffer_len < 1)
-    //g_warning("invaild length");
+    //g_warning("invalid length");
     return -1;
   presp->result = buffer[0];
   switch (HIBYTE (cmd))
@@ -416,7 +416,7 @@ gx_proto_init_sensor_config (pfp_sensor_cfg_t pconfig)
   uint32_t crc32_calc = 0;
 
   if (!pconfig)
-    //g_warning("invaild point");
+    //g_warning("invalid point");
     return -1;
   memset (pconfig, 0, sizeof (*pconfig));
 

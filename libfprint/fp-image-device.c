@@ -65,7 +65,7 @@ pending_activation_timeout (gpointer user_data)
   FpImageDevicePrivate *priv = fp_image_device_get_instance_private (self);
 
   priv->pending_activation_timeout_id = 0;
-
+// synatpics does it?!
   if (priv->pending_activation_timeout_waiting_finger_off)
     fpi_device_action_error (FP_DEVICE (self),
                              fpi_device_retry_new_msg (FP_DEVICE_RETRY_REMOVE_FINGER,

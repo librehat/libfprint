@@ -49,6 +49,8 @@ deps += declare_dependency(
     ]
 )
 
+#Guard against duplicated +tod1
+#todversion = meson.project_version()
 pkgconfig = import('pkgconfig')
 pkgconfig.generate(libfprint_tod,
     name: versioned_libname + '-tod',

@@ -249,7 +249,6 @@ fp_cmd_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
       else
         g_error_free (error);
     }
-  self->cmd_cancelable = FALSE;
 }
 
 static FpiUsbTransfer *

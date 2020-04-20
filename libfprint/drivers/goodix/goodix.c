@@ -264,20 +264,13 @@ alloc_cmd_transfer (FpDevice     *dev,
 
   guint32 total_len = data_len + PACKAGE_HEADER_SIZE + PACKAGE_CRC_SIZE;
 
-  if (!data && data_len > 0)
-    {
-      fp_err ("len>0 but no data?");
-      return NULL;
-    }
+  g_return_val_if_fail (data || data_len == 0, NULL);
 
   fpi_usb_transfer_fill_bulk (transfer, EP_OUT, total_len);
 
   ret = gx_proto_build_package (transfer->buffer, &total_len, MAKE_CMD_EX (cmd0, cmd1), data, data_len);
-  if (ret != 0)
-    {
-      fp_err ("build package failed.");
-      return NULL;
-    }
+
+  g_return_val_if_fail (ret == 0, NULL);
 
   return g_steal_pointer (&transfer);
 }

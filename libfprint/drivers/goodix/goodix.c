@@ -373,12 +373,10 @@ fp_verify_identify_cb (FpiDeviceGoodixMoc *self,
     }
   if (!resp->verify.match)
     {
-      fp_warn ("Verify not match");
       fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
     }
   else if (memcmp (&resp->verify.template.tid, &self->template_id, TEMPLATE_ID_SIZE) != 0)
     {
-      fp_warn ("Verify match, but template id not match");
       fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
     }
   else

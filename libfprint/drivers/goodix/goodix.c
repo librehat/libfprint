@@ -618,16 +618,18 @@ fp_enroll_update_cb (FpiDeviceGoodixMoc *self,
       fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CAPTURE);
       return;
     }
-  if (resp->enroll_update.rollback)
+  if (!resp->enroll_update.rollback)
     {
-      if (self->enroll_stage > 0)
-        self->enroll_stage--;
+      self->enroll_stage++;
+      fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
     }
   else
     {
-      self->enroll_stage++;
+      fpi_device_enroll_progress (FP_DEVICE (self),
+                                  self->enroll_stage,
+                                  NULL,
+                                  fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
     }
-  fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
   if (self->enroll_stage < ENROLL_SAMPLES)
     {
       fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CAPTURE);

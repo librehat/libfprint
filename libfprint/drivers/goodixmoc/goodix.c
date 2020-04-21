@@ -439,42 +439,6 @@ fp_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
  *  fp__xxxx Function
  *
  *****************************************************************************/
-static gchar *
-generate_user_id (FpPrint *print)
-{
-  const gchar *username = NULL;
-  gchar *user_id = NULL;
-  const GDate *date;
-  gint y = 0, m = 0, d = 0;
-  gint32 rand_id = 0;
-
-  g_assert (print);
-  date = fp_print_get_enroll_date (print);
-  if (date && g_date_valid (date))
-    {
-      y = g_date_get_year (date);
-      m = g_date_get_month (date);
-      d = g_date_get_day (date);
-    }
-
-  username = fp_print_get_username (print);
-  if (!username)
-    username = "nobody";
-
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
-    rand_id = 0;
-  else
-    rand_id = g_random_int ();
-
-  user_id = g_strdup_printf ("FP1-%04d%02d%02d-%X-%08X-%s",
-                             y, m, d,
-                             fp_print_get_finger (print),
-                             rand_id,
-                             username);
-
-  return user_id;
-
-}
 static gboolean
 encode_finger_id (
   const guint8 * tid,
@@ -740,7 +704,7 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
     case FP_ENROLL_COMMIT:
       {
         fpi_device_get_enroll_data (device, &print);
-        user_id = generate_user_id (print);
+        user_id = fpi_print_generate_user_id (print);
         user_id_len = strlen (user_id);
         user_id_len = MIN (100, user_id_len);
         finger = 1;
@@ -1048,42 +1012,7 @@ fp_template_list_cb (FpiDeviceGoodixMoc *self,
       fpi_print_set_device_stored (print, TRUE);
       g_object_set (print, "fpi-data", data, NULL);
       g_object_set (print, "description", userid, NULL);
-
-      /* The format has 24 bytes at the start and some dashes in the right places */
-      if (g_str_has_prefix (userid, "FP1-") && strlen (userid) >= 24 &&
-          userid[12] == '-' && userid[14] == '-' && userid[23] == '-')
-        {
-          g_autofree gchar *copy = g_strdup (userid);
-          gint32 date_ymd;
-          GDate *date = NULL;
-          gint32 finger;
-          gchar *username;
-          /* Try to parse information from the string. */
-
-          copy[12] = '\0';
-          date_ymd = g_ascii_strtod (copy + 4, NULL);
-          if (date_ymd > 0)
-            date = g_date_new_dmy (date_ymd % 100,
-                                   (date_ymd / 100) % 100,
-                                   date_ymd / 10000);
-          else
-            date = g_date_new ();
-
-          fp_print_set_enroll_date (print, date);
-          g_date_free (date);
-
-          copy[14] = '\0';
-          finger = g_ascii_strtoll (copy + 13, NULL, 16);
-          fp_print_set_finger (print, finger);
-
-          /* We ignore the next chunk, it is just random data.
-           * Then comes the username; nobody is the default if the metadata
-           * is unknown */
-          username = copy + 24;
-          if (strlen (username) > 0 && g_strcmp0 (username, "nobody") != 0)
-            fp_print_set_username (print, username);
-        }
-
+      fpi_print_fill_from_user_id (print, userid);
       g_ptr_array_add (self->list_result, g_object_ref_sink (print));
     }
 

@@ -163,8 +163,8 @@ foreach driver: drivers
     endif
     if driver == 'goodixmoc'
     drivers_sources += [
-        'drivers/goodix/goodix.c',
-        'drivers/goodix/goodix_proto.c',
+        'drivers/goodixmoc/goodix.c',
+        'drivers/goodixmoc/goodix_proto.c',
     ]
     endif
 endforeach

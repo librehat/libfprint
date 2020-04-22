@@ -44,6 +44,7 @@
 #define GX_FAILED 0x80
 #define GX_ERROR_FINGER_ID_NOEXIST 0x9C
 #define GX_ERROR_TEMPLATE_INCOMPLETE 0xB8
+#define GX_ERROR_WAIT_FINGER_UP_TIMEOUT 0xC7
 
 /* Command Type Define */
 #define RESPONSE_PACKAGE_CMD 0xAA
@@ -70,6 +71,11 @@
 #define MOC_CMD0_UPDATE_CONFIG 0xC0
 #define MOC_CMD1_NWRITE_CFG_TO_FLASH 0x00
 #define MOC_CMD1_WRITE_CFG_TO_FLASH 0x01
+
+#define MOC_CMD0_FINGER_MODE 0xB0
+#define MOC_CMD1_GET_FINGER_MODE 0x00
+#define MOC_CMD1_SET_FINGER_DOWN 0x01
+#define MOC_CMD1_SET_FINGER_UP 0x02
 /* */
 
 typedef struct _fp_version_info
@@ -157,6 +163,11 @@ typedef struct _fp_enroll_commit
   uint8_t result;
 } fp_enroll_commit_t, *pfp_enroll_commit_t;
 
+typedef struct _fp_finger_status
+{
+  uint8_t status;
+} fp_finger_status_t, *pfp_finger_status_t;
+
 
 typedef struct _fp_cmd_response
 {
@@ -172,6 +183,7 @@ typedef struct _fp_cmd_response
     fp_enroll_update_t   enroll_update;
     fp_enum_fingerlist_t finger_list_resp;
     fp_version_info_t    version_info;
+    fp_finger_status_t   finger_status;
   };
 } fp_cmd_response_t, *pfp_cmd_response_t;
 

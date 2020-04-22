@@ -398,6 +398,10 @@ gx_proto_parse_body (uint16_t cmd, uint8_t *buffer, uint32_t buffer_len, pfp_cmd
       }
       break;
 
+    case MOC_CMD0_FINGER_MODE:
+      presp->finger_status.status = buffer[0];
+      break;
+
     default:
       break;
     }

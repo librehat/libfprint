@@ -260,11 +260,13 @@ alloc_cmd_transfer (FpDevice     *dev,
 {
   gint ret = -1;
 
-  g_autoptr(FpiUsbTransfer) transfer = fpi_usb_transfer_new (dev);
+  g_autoptr(FpiUsbTransfer) transfer = NULL;
 
   guint32 total_len = data_len + PACKAGE_HEADER_SIZE + PACKAGE_CRC_SIZE;
 
   g_return_val_if_fail (data || data_len == 0, NULL);
+
+  transfer = fpi_usb_transfer_new (dev);
 
   fpi_usb_transfer_fill_bulk (transfer, EP_OUT, total_len);
 
@@ -579,24 +581,23 @@ fp_enroll_update_cb (FpiDeviceGoodixMoc *self,
                                   self->enroll_stage,
                                   NULL,
                                   fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER));
-      fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CAPTURE);
-      return;
     }
-  if (!resp->enroll_update.rollback)
-    {
-      self->enroll_stage++;
-      fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
-    }
-  else
+  else if (resp->enroll_update.rollback)
     {
       fpi_device_enroll_progress (FP_DEVICE (self),
                                   self->enroll_stage,
                                   NULL,
                                   fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
     }
-  if (self->enroll_stage < ENROLL_SAMPLES)
+  else
     {
-      fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CAPTURE);
+      self->enroll_stage++;
+      fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
+    }
+  /* if enroll complete, no need to wait finger up */
+  if (self->enroll_stage >= ENROLL_SAMPLES)
+    {
+      fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CHECK_DUPLICATE);
       return;
     }
 
@@ -639,6 +640,39 @@ fp_enroll_commit_cb (FpiDeviceGoodixMoc *self,
       fpi_ssm_mark_failed (self->task_ssm,
                            fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
                                                      "Commit template failed"));
+      return;
+    }
+  fpi_ssm_next_state (self->task_ssm);
+}
+
+static void
+fp_finger_mode_cb (FpiDeviceGoodixMoc *self,
+                   fp_cmd_response_t  *resp,
+                   GError             *error)
+{
+  if (error)
+    {
+      fpi_ssm_mark_failed (self->task_ssm, error);
+      return;
+    }
+  if ((resp->finger_status.status != GX_SUCCESS) &&
+      (resp->finger_status.status != GX_ERROR_WAIT_FINGER_UP_TIMEOUT))
+    {
+      fpi_ssm_mark_failed (self->task_ssm,
+                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                                     "Wait finger up failed"));
+      return;
+    }
+  /* if reach max timeout(5sec) finger not up, swtich to finger up again */
+  if (resp->finger_status.status == GX_ERROR_WAIT_FINGER_UP_TIMEOUT)
+    {
+      fpi_ssm_jump_to_state (self->task_ssm, FP_WAIT_FINGER_UP);
+      return;
+    }
+
+  if (self->enroll_stage < ENROLL_SAMPLES)
+    {
+      fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_CAPTURE);
       return;
     }
   fpi_ssm_next_state (self->task_ssm);
@@ -691,6 +725,15 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
                          (const guint8 *) &dummy,
                          3,
                          fp_enroll_update_cb);
+      break;
+
+    case FP_WAIT_FINGER_UP:
+      dummy[0] = 0;
+      goodix_sensor_cmd (self, MOC_CMD0_FINGER_MODE, MOC_CMD1_SET_FINGER_UP,
+                         true,
+                         (const guint8 *) &dummy,
+                         1,
+                         fp_finger_mode_cb);
       break;
 
     case FP_ENROLL_CHECK_DUPLICATE:

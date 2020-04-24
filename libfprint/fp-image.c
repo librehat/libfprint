@@ -184,10 +184,8 @@ fp_image_detect_minutiae_cb (GObject      *source_object,
   GTask *task = G_TASK (res);
   FpImage *image;
   DetectMinutiaeData *data = g_task_get_task_data (task);
-  GCancellable *cancellable;
 
-  cancellable = g_task_get_cancellable (task);
-  if (!cancellable || !g_cancellable_is_cancelled (cancellable))
+  if (!g_cancellable_is_cancelled (g_task_get_cancellable (task)))
     {
       gint i;
       image = FP_IMAGE (source_object);
@@ -201,15 +199,19 @@ fp_image_detect_minutiae_cb (GObject      *source_object,
       image->binarized = g_steal_pointer (&data->binarized);
 
       g_clear_pointer (&image->minutiae, g_ptr_array_unref);
-      image->minutiae = g_ptr_array_new_full (data->minutiae->num,
-                                              (GDestroyNotify) free_minutia);
 
-      for (i = 0; i < data->minutiae->num; i++)
-        g_ptr_array_add (image->minutiae,
-                         g_steal_pointer (&data->minutiae->list[i]));
+      if (data->minutiae)
+        {
+          image->minutiae = g_ptr_array_new_full (data->minutiae->num,
+                                                  (GDestroyNotify) free_minutia);
 
-      /* Don't let it delete anything. */
-      data->minutiae->num = 0;
+          for (i = 0; i < data->minutiae->num; i++)
+            g_ptr_array_add (image->minutiae,
+                            g_steal_pointer (&data->minutiae->list[i]));
+
+          /* Don't let it delete anything. */
+          data->minutiae->num = 0;
+        }
     }
 
   if (data->user_cb)

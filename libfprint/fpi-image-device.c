@@ -139,7 +139,10 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
 
   /* Note: We rely on the device to not disappear during an operation. */
 
-  if (!fp_image_detect_minutiae_finish (image, res, &error))
+  gboolean ret = fp_image_detect_minutiae_finish (image, res, &error);
+  g_print("Finish detection %d, error: %p (%s)\n", ret, error, error ? error->message : NULL);
+
+  if (!ret)
     {
       /* Cancel operation . */
       if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
@@ -148,12 +151,6 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
           fpi_image_device_deactivate (self);
           return;
         }
-
-      /* Replace error with a retry condition. */
-      g_warning ("Failed to detect minutiae: %s", error->message);
-      g_clear_pointer (&error, g_error_free);
-
-      error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL, "Minutiae detection failed, please retry");
     }
 
   priv = fp_image_device_get_instance_private (FP_IMAGE_DEVICE (device));
@@ -172,6 +169,15 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       fpi_print_set_type (print, FPI_PRINT_NBIS);
       if (!fpi_print_add_from_image (print, image, &error))
         g_clear_object (&print);
+    }
+
+  if (error)
+    {
+      /* Replace error with a retry condition. */
+      g_warning ("Failed to detect minutiae: %s", error->message);
+      g_clear_pointer (&error, g_error_free);
+
+      error = fpi_device_retry_new_msg (FP_DEVICE_RETRY_GENERAL, "Minutiae detection failed, please retry");
     }
 
   if (action == FPI_DEVICE_ACTION_ENROLL)

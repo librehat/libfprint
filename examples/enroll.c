@@ -166,7 +166,7 @@ main (void)
       return EXIT_FAILURE;
     }
 
-  setenv ("G_MESSAGES_DEBUG", "all", 0);
+  // setenv ("G_MESSAGES_DEBUG", "all", 0);
 
   ctx = fp_context_new ();
 

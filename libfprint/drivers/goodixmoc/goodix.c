@@ -325,9 +325,6 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
                       fp_cmd_response_t  *resp,
                       GError             *error)
 {
-  FpDevice *device = FP_DEVICE (self);
-  GError *error_msg = NULL;
-
   if (error)
     {
       fpi_ssm_mark_failed (self->task_ssm, error);
@@ -336,8 +333,9 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
   if (resp->result >= GX_FAILED)
     {
       fp_dbg ("Capture sample failed, result: 0x%x", resp->result);
-      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL);
-      goto failed;
+      fpi_ssm_mark_failed (self->task_ssm,
+                           fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
+      return;
     }
 
   if ((resp->capture_data_resp.img_quality <= 0) || (resp->capture_data_resp.img_coverage < 35))
@@ -346,19 +344,12 @@ fp_verify_capture_cb (FpiDeviceGoodixMoc *self,
       fp_dbg ("Catpure sample poor quality: %d or poor coverage: %d",
               resp->capture_data_resp.img_quality,
               resp->capture_data_resp.img_coverage);
-      error_msg = fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER);
-      goto failed;
+      fpi_ssm_mark_failed (self->task_ssm,
+                           fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER));
+      return;
     }
-failed:
-  if (error_msg)
-    {
-      fpi_device_verify_report (device, FPI_MATCH_ERROR, NULL, error_msg);
-      fpi_ssm_mark_completed (self->task_ssm);
-    }
-  else
-    {
-      fpi_ssm_next_state (self->task_ssm);
-    }
+
+  fpi_ssm_next_state (self->task_ssm);
 }
 
 static void
@@ -389,7 +380,6 @@ fp_verify_identify_cb (FpiDeviceGoodixMoc *self,
     }
 
   fpi_ssm_mark_completed (self->task_ssm);
-
 }
 
 static void
@@ -429,6 +419,9 @@ fp_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
   FpiDeviceGoodixMoc *self = FPI_DEVICE_GOODIXMOC (dev);
 
   fp_info ("Verify complete!");
+
+  if (error && error->domain == FP_DEVICE_RETRY)
+    fpi_device_verify_report (dev, FPI_MATCH_ERROR, NULL, error);
 
   fpi_device_verify_complete (dev, error);
 
@@ -1314,6 +1307,7 @@ gx_fp_cancel (FpDevice *device)
 
 static const FpIdEntry id_table[] = {
   { .vid = 0x27c6,  .pid = 0x5840,  },
+  { .vid = 0x27c6,  .pid = 0x6496,  },
   { .vid = 0,  .pid = 0,  .driver_data = 0 },   /* terminating entry */
 };
 

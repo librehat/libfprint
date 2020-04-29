@@ -218,7 +218,8 @@ dev_verify (FpDevice *dev)
 
   fpi_device_verify_report (dev,
                             success ? FPI_MATCH_SUCCESS : FPI_MATCH_FAIL,
-                            NULL, NULL);
+                            success ? print : NULL,
+                            NULL);
   fpi_device_verify_complete (dev, NULL);
 }
 

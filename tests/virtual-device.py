@@ -174,7 +174,7 @@ class VirtualDevice(unittest.TestCase):
 
 class VirtualDeviceStorage(VirtualDevice):
 
-     def test_device_properties(self):
+    def cleanup_device_storage(self):
         self.assertEqual(self.dev.get_driver(), 'virtual_device_storage')
         self.assertEqual(self.dev.get_device_id(), '0')
         self.assertEqual(self.dev.get_name(),

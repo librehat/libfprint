@@ -311,7 +311,7 @@ dev_enroll (FpDevice *dev)
       if (fp_device_has_storage (dev))
         fpi_print_set_device_stored (print, TRUE);
       g_object_set (print, "fpi-data", fp_data, NULL);
-      fpi_device_enroll_complete (dev, print, NULL);
+      fpi_device_enroll_complete (dev, g_object_ref (print), NULL);
     }
   else
     {

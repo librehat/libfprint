@@ -79,3 +79,10 @@ struct _FpDeviceVirtualDeviceStorage
 };
 
 G_DECLARE_FINAL_TYPE (FpDeviceVirtualDeviceStorage, fpi_device_virtual_device_storage, FP, DEVICE_VIRTUAL_DEVICE_STORAGE, FpDeviceVirtualDevice)
+
+
+FpFinger str_to_finger (const char *str);
+const char *finger_to_str (FpFinger finger);
+
+char *make_print_key (FpPrint *print);
+FpPrint *parse_print_key (FpDevice *dev, const char *key);

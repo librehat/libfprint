@@ -36,7 +36,7 @@ G_DEFINE_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP_TYPE_DEVICE)
 
 #define ADD_CMD_PREFIX "ADD "
 
-static FpFinger
+FpFinger
 str_to_finger (const char *str)
 {
   GEnumClass *eclass;
@@ -52,7 +52,7 @@ str_to_finger (const char *str)
   return value->value;
 }
 
-static const char *
+const char *
 finger_to_str (FpFinger finger)
 {
   GEnumClass *eclass;
@@ -80,6 +80,39 @@ parse_code (const char *str)
   return FPI_MATCH_FAIL;
 }
 
+static char *
+make_print_key_from_username (const char *username, FpFinger finger)
+{
+  return g_strdup_printf ("%s-%s", username, finger_to_str (finger));
+}
+
+char *
+make_print_key (FpPrint *print)
+{
+  return make_print_key_from_username (fp_print_get_username (print),
+                                       fp_print_get_finger (print));
+}
+
+FpPrint *parse_print_key (FpDevice *dev,
+                          const char *key)
+{
+  FpPrint *print;
+  g_auto(GStrv) parts = NULL;
+
+  g_return_val_if_fail (key, NULL);
+
+  parts = g_strsplit ((const char *) key, "-", 2);
+
+  if (!parts || g_strv_length (parts) != 2)
+    return NULL;
+
+  print = fp_print_new (dev);
+  fp_print_set_username (print, parts[0]);
+  fp_print_set_finger (print, str_to_finger (parts[1]));
+
+  return print;
+}
+
 static void
 handle_command_line (FpDeviceVirtualDevice *self,
                      const char            *line)
@@ -91,7 +124,6 @@ handle_command_line (FpDeviceVirtualDevice *self,
       FpFinger finger;
       gboolean success;
       g_autofree char *description = NULL;
-      char *key;
 
       /* Syntax: ADD <finger> <username> <error when used> */
       elems = g_strsplit (line + strlen (ADD_CMD_PREFIX), " ", 3);
@@ -109,9 +141,9 @@ handle_command_line (FpDeviceVirtualDevice *self,
       fp_print_set_description (print, description);
       success = parse_code (elems[2]);
 
-      key = g_strdup_printf ("%s-%s", elems[0], elems[1]);
       g_hash_table_insert (self->pending_prints,
-                           key, GINT_TO_POINTER (success));
+                           make_print_key (print),
+                           GINT_TO_POINTER (success));
 
       fp_dbg ("Added pending print %s for user %s (code: %s)",
               elems[0], elems[1], success ? "FPI_MATCH_SUCCESS" : "FPI_MATCH_FAIL");
@@ -232,9 +264,7 @@ dev_enroll (FpDevice *dev)
   g_autofree char *key = NULL;
 
   fpi_device_get_enroll_data (dev, &print);
-  key = g_strdup_printf ("%s-%s",
-                         finger_to_str (fp_print_get_finger (print)),
-                         fp_print_get_username (print));
+  key = make_print_key (print);
 
   fp_dbg ("We have %u pending prints", g_hash_table_size (self->pending_prints));
 

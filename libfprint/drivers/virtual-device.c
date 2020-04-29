@@ -236,6 +236,8 @@ dev_enroll (FpDevice *dev)
                          finger_to_str (fp_print_get_finger (print)),
                          fp_print_get_username (print));
 
+  fp_dbg ("We have %u pending prints", g_hash_table_size (self->pending_prints));
+
   if (g_hash_table_lookup_extended (self->pending_prints, key, NULL, &success_ptr))
     {
       gboolean success = GPOINTER_TO_INT (success_ptr);
@@ -250,9 +252,13 @@ dev_enroll (FpDevice *dev)
     }
   else
     {
-      fpi_device_enroll_complete (dev, NULL,
-                                  fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
-                                                            "No pending result for this username/finger combination"));
+      GError *error;
+
+      error = fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                        "No Pending finger %s for user %s",
+                                        finger_to_str (fp_print_get_finger (print)),
+                                        fp_print_get_username (print));
+      fpi_device_enroll_complete (dev, NULL, error);
     }
 }
 

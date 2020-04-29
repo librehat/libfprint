@@ -279,6 +279,8 @@ dev_enroll (FpDevice *dev)
         fpi_print_set_device_stored (print, TRUE);
       g_object_set (print, "fpi-data", fp_data, NULL);
       fpi_device_enroll_complete (dev, g_object_ref (print), NULL);
+
+      g_hash_table_remove (self->pending_prints, key);
     }
   else
     {

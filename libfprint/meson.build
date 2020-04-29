@@ -161,6 +161,9 @@ foreach driver: drivers
     if driver == 'virtual_device_storage'
         drivers_sources += [ 'drivers/virtual-device-storage.c' ]
     endif
+    if driver.startswith('virtual_')
+        drivers_sources += [ 'drivers/virtual-device-listener.c' ]
+    endif
     if driver == 'synaptics'
     drivers_sources += [
         'drivers/synaptics/synaptics.c',

@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2019 Benjamin Berg <bberg@redhat.com>
  * Copyright (C) 2020 Bastien Nocera <hadess@hadess.net>
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,8 +33,6 @@
 #include "fpi-log.h"
 
 G_DEFINE_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP_TYPE_DEVICE)
-
-static void start_listen (FpDeviceVirtualDevice *self);
 
 #define ADD_CMD_PREFIX "ADD "
 
@@ -129,143 +128,78 @@ recv_instruction_cb (GObject      *source_object,
                      gpointer      user_data)
 {
   g_autoptr(GError) error = NULL;
-  FpDeviceVirtualDevice *self;
-  gboolean success;
+  FpDeviceVirtualListener *listener = FP_DEVICE_VIRTUAL_LISTENER (source_object);
   gsize bytes;
 
-  success = g_input_stream_read_all_finish (G_INPUT_STREAM (source_object), res, &bytes, &error);
+  bytes = fp_device_virtual_listener_read_finish (listener, res, &error);
+  fp_dbg ("Got instructions of length %ld\n", bytes);
 
-  if (!success || bytes == 0)
-    {
-      if (!success)
-        {
-          if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) ||
-              g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CLOSED))
-            return;
-          g_warning ("Error receiving instruction data: %s", error->message);
-        }
-
-      self = FP_DEVICE_VIRTUAL_DEVICE (user_data);
-      goto out;
-    }
-
-  self = FP_DEVICE_VIRTUAL_DEVICE (user_data);
-  handle_command_line (self, (const char *) self->line);
-
-out:
-  g_io_stream_close (G_IO_STREAM (self->connection), NULL, NULL);
-  g_clear_object (&self->connection);
-
-  start_listen (self);
-}
-
-static void
-recv_instruction (FpDeviceVirtualDevice *self,
-                  GInputStream          *stream)
-{
-  memset (&self->line, 0, sizeof (self->line));
-  g_input_stream_read_all_async (stream,
-                                 self->line,
-                                 sizeof (self->line),
-                                 G_PRIORITY_DEFAULT,
-                                 self->cancellable,
-                                 recv_instruction_cb,
-                                 self);
-}
-
-static void
-new_connection_cb (GObject      *source_object,
-                   GAsyncResult *res,
-                   gpointer      user_data)
-{
-  g_autoptr(GError) error = NULL;
-  GSocketConnection *connection;
-  GInputStream *stream;
-  FpDeviceVirtualDevice *self = user_data;
-
-  connection = g_socket_listener_accept_finish (G_SOCKET_LISTENER (source_object),
-                                                res,
-                                                NULL,
-                                                &error);
-  if (!connection)
+  if (error)
     {
       if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         return;
 
-      g_warning ("Error accepting a new connection: %s", error->message);
-      start_listen (self);
+      g_warning ("Error receiving instruction data: %s", error->message);
       return;
     }
 
-  /* Always further connections (but we disconnect them immediately
-   * if we already have a connection). */
-  if (self->connection)
+  if (bytes > 0)
     {
-      g_io_stream_close (G_IO_STREAM (connection), NULL, NULL);
-      g_object_unref (connection);
-      start_listen (self);
-      return;
+      FpDeviceVirtualDevice *self;
+
+      self = FP_DEVICE_VIRTUAL_DEVICE (user_data);
+      handle_command_line (self, (const char *) self->line);
     }
 
-  self->connection = connection;
-  stream = g_io_stream_get_input_stream (G_IO_STREAM (connection));
-
-  recv_instruction (self, stream);
-
-  fp_dbg ("Got a new connection!");
+  fp_device_virtual_listener_connection_close (listener);
 }
 
 static void
-start_listen (FpDeviceVirtualDevice *self)
+recv_instruction (FpDeviceVirtualDevice *self)
 {
-  fp_dbg ("Starting a new listener");
-  g_socket_listener_accept_async (self->listener,
-                                  self->cancellable,
-                                  new_connection_cb,
-                                  self);
+  memset (&self->line, 0, sizeof (self->line));
+
+  fp_device_virtual_listener_read (self->listener,
+                                   self->line,
+                                   sizeof (self->line),
+                                   recv_instruction_cb,
+                                   self);
+}
+
+static void
+on_listener_connected (FpDeviceVirtualListener *listener,
+                       gpointer                 user_data)
+{
+  FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (user_data);
+
+  recv_instruction (self);
 }
 
 static void
 dev_init (FpDevice *dev)
 {
   g_autoptr(GError) error = NULL;
-  g_autoptr(GSocketListener) listener = NULL;
-  g_autoptr(GSocketAddress) addr = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
+  g_autoptr(FpDeviceVirtualListener) listener = NULL;
   FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (dev);
-  const char *env;
   G_DEBUG_HERE ();
 
-  self->client_fd = -1;
+  listener = fp_device_virtual_listener_new ();
+  cancellable = g_cancellable_new ();
 
-  env = fpi_device_get_virtual_env (FP_DEVICE (self));
-
-  listener = g_socket_listener_new ();
-  g_socket_listener_set_backlog (listener, 1);
-
-  /* Remove any left over socket. */
-  g_unlink (env);
-
-  addr = g_unix_socket_address_new (env);
-
-  if (!g_socket_listener_add_address (listener,
-                                      addr,
-                                      G_SOCKET_TYPE_STREAM,
-                                      G_SOCKET_PROTOCOL_DEFAULT,
-                                      NULL,
-                                      NULL,
-                                      &error))
+  if (!fp_device_virtual_listener_start (listener,
+                                         fpi_device_get_virtual_env (FP_DEVICE (self)),
+                                         cancellable,
+                                         on_listener_connected,
+                                         self,
+                                         &error))
     {
-      g_warning ("Could not listen on unix socket: %s", error->message);
-
-      fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
-
+      fpi_device_open_complete (dev, g_steal_pointer (&error));
       return;
     }
 
   self->listener = g_steal_pointer (&listener);
-  self->cancellable = g_cancellable_new ();
-
-  start_listen (self);
+  self->cancellable = g_steal_pointer (&cancellable);
 
   fpi_device_open_complete (dev, NULL);
 }
@@ -329,7 +263,7 @@ dev_deinit (FpDevice *dev)
   g_cancellable_cancel (self->cancellable);
   g_clear_object (&self->cancellable);
   g_clear_object (&self->listener);
-  g_clear_object (&self->connection);
+  g_clear_object (&self->listener);
 
   fpi_device_close_complete (dev, NULL);
 }

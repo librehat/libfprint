@@ -26,27 +26,47 @@
  * Using this, it is possible to test libfprint and fprintd.
  */
 
-#include <glib/gstdio.h>
 #include <gio/gio.h>
-#include <gio/gunixsocketaddress.h>
 
 #include "fpi-device.h"
 
 #define MAX_LINE_LEN 1024
 
+G_DECLARE_FINAL_TYPE (FpDeviceVirtualListener, fp_device_virtual_listener, FP, DEVICE_VIRTUAL_LISTENER, GSocketListener)
+
+typedef void (*FpDeviceVirtualListenerConnectionCb) (FpDeviceVirtualListener *listener,
+                                                     gpointer                 user_data);
+
+FpDeviceVirtualListener * fp_device_virtual_listener_new (void);
+
+gboolean fp_device_virtual_listener_start (FpDeviceVirtualListener            *listener,
+                                           const char                         *address,
+                                           GCancellable                       *cancellable,
+                                           FpDeviceVirtualListenerConnectionCb cb,
+                                           gpointer                            user_data,
+                                           GError                            **error);
+
+gboolean fp_device_virtual_listener_connection_close (FpDeviceVirtualListener *listener);
+
+void fp_device_virtual_listener_read (FpDeviceVirtualListener *listener,
+                                      void                    *buffer,
+                                      gsize                    count,
+                                      GAsyncReadyCallback      callback,
+                                      gpointer                 user_data);
+gsize fp_device_virtual_listener_read_finish (FpDeviceVirtualListener *listener,
+                                              GAsyncResult            *result,
+                                              GError                 **error);
+
 struct _FpDeviceVirtualDevice
 {
-  FpDevice           parent;
+  FpDevice                 parent;
 
-  GSocketListener   *listener;
-  GSocketConnection *connection;
-  GCancellable      *cancellable;
+  FpDeviceVirtualListener *listener;
+  GCancellable            *cancellable;
 
-  gint               socket_fd;
-  gint               client_fd;
-  guint              line[MAX_LINE_LEN];
+  guint                    line[MAX_LINE_LEN];
 
-  GHashTable        *pending_prints; /* key: finger+username value: gboolean */
+  GHashTable              *pending_prints; /* key: finger+username value: gboolean */
 };
 
 /* Not really final here, but we can do this to share the FpDeviceVirtualDevice

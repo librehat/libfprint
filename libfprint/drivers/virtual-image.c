@@ -29,35 +29,27 @@
 
 #include "fpi-log.h"
 
+#include "virtual-device-private.h"
+
 #include "../fpi-image.h"
 #include "../fpi-image-device.h"
 
-#include <glib/gstdio.h>
-#include <gio/gio.h>
-#include <gio/gunixsocketaddress.h>
-
 struct _FpDeviceVirtualImage
 {
-  FpImageDevice      parent;
+  FpImageDevice            parent;
 
-  GSocketListener   *listener;
-  GSocketConnection *connection;
-  GCancellable      *cancellable;
+  FpDeviceVirtualListener *listener;
+  GCancellable            *cancellable;
 
-  gint               socket_fd;
-  gint               client_fd;
-
-  gboolean           automatic_finger;
-  FpImage           *recv_img;
-  gint               recv_img_hdr[2];
+  gboolean                 automatic_finger;
+  FpImage                 *recv_img;
+  gint                     recv_img_hdr[2];
 };
 
 G_DECLARE_FINAL_TYPE (FpDeviceVirtualImage, fpi_device_virtual_image, FPI, DEVICE_VIRTUAL_IMAGE, FpImageDevice)
 G_DEFINE_TYPE (FpDeviceVirtualImage, fpi_device_virtual_image, FP_TYPE_IMAGE_DEVICE)
 
-static void start_listen (FpDeviceVirtualImage *dev);
-static void recv_image (FpDeviceVirtualImage *dev,
-                        GInputStream         *stream);
+static void recv_image (FpDeviceVirtualImage *self);
 
 static void
 recv_image_img_recv_cb (GObject      *source_object,
@@ -65,27 +57,15 @@ recv_image_img_recv_cb (GObject      *source_object,
                         gpointer      user_data)
 {
   g_autoptr(GError) error = NULL;
+  FpDeviceVirtualListener *listener = FP_DEVICE_VIRTUAL_LISTENER (source_object);
   FpDeviceVirtualImage *self;
   FpImageDevice *device;
-  gboolean success;
-  gsize bytes = 0;
+  gsize bytes;
 
-  success = g_input_stream_read_all_finish (G_INPUT_STREAM (source_object), res, &bytes, &error);
+  bytes = fp_device_virtual_listener_read_finish (listener, res, &error);
 
-  if (!success || bytes == 0)
-    {
-      if (!success)
-        {
-          if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-            return;
-          g_warning ("Error receiving header for image data: %s", error->message);
-        }
-
-      self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
-      g_io_stream_close (G_IO_STREAM (self->connection), NULL, NULL);
-      g_clear_object (&self->connection);
-      return;
-    }
+  if (!bytes || g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
 
   self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
   device = FP_IMAGE_DEVICE (self);
@@ -97,7 +77,7 @@ recv_image_img_recv_cb (GObject      *source_object,
     fpi_image_device_report_finger_status (device, FALSE);
 
   /* And, listen for more images from the same client. */
-  recv_image (self, G_INPUT_STREAM (source_object));
+  recv_image (self);
 }
 
 static void
@@ -107,33 +87,28 @@ recv_image_hdr_recv_cb (GObject      *source_object,
 {
   g_autoptr(GError) error = NULL;
   FpDeviceVirtualImage *self;
-  gboolean success;
+  FpDeviceVirtualListener *listener = FP_DEVICE_VIRTUAL_LISTENER (source_object);
   gsize bytes;
 
-  success = g_input_stream_read_all_finish (G_INPUT_STREAM (source_object), res, &bytes, &error);
+  bytes = fp_device_virtual_listener_read_finish (listener, res, &error);
 
-  if (!success || bytes == 0)
+  if (error)
     {
-      if (!success)
-        {
-          if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED) ||
-              g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CLOSED))
-            return;
-          g_warning ("Error receiving header for image data: %s", error->message);
-        }
+      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+        return;
 
-      self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
-      g_io_stream_close (G_IO_STREAM (self->connection), NULL, NULL);
-      g_clear_object (&self->connection);
+      g_warning ("Error receiving header for image data: %s", error->message);
       return;
     }
+
+  if (!bytes)
+    return;
 
   self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
   if (self->recv_img_hdr[0] > 5000 || self->recv_img_hdr[1] > 5000)
     {
       g_warning ("Image header suggests an unrealistically large image, disconnecting client.");
-      g_io_stream_close (G_IO_STREAM (self->connection), NULL, NULL);
-      g_clear_object (&self->connection);
+      fp_device_virtual_listener_connection_close (listener);
     }
 
   if (self->recv_img_hdr[0] < 0 || self->recv_img_hdr[1] < 0)
@@ -164,129 +139,69 @@ recv_image_hdr_recv_cb (GObject      *source_object,
 
         default:
           /* disconnect client, it didn't play fair */
-          g_io_stream_close (G_IO_STREAM (self->connection), NULL, NULL);
-          g_clear_object (&self->connection);
+          fp_device_virtual_listener_connection_close (listener);
         }
 
       /* And, listen for more images from the same client. */
-      recv_image (self, G_INPUT_STREAM (source_object));
+      recv_image (self);
       return;
     }
 
   self->recv_img = fp_image_new (self->recv_img_hdr[0], self->recv_img_hdr[1]);
   g_debug ("image data: %p", self->recv_img->data);
-  g_input_stream_read_all_async (G_INPUT_STREAM (source_object),
-                                 (guint8 *) self->recv_img->data,
-                                 self->recv_img->width * self->recv_img->height,
-                                 G_PRIORITY_DEFAULT,
-                                 self->cancellable,
-                                 recv_image_img_recv_cb,
-                                 self);
+  fp_device_virtual_listener_read (listener,
+                                   (guint8 *) self->recv_img->data,
+                                   self->recv_img->width * self->recv_img->height,
+                                   recv_image_img_recv_cb,
+                                   self);
 }
 
 static void
-recv_image (FpDeviceVirtualImage *dev, GInputStream *stream)
+recv_image (FpDeviceVirtualImage *self)
 {
-  g_input_stream_read_all_async (stream,
-                                 dev->recv_img_hdr,
-                                 sizeof (dev->recv_img_hdr),
-                                 G_PRIORITY_DEFAULT,
-                                 dev->cancellable,
-                                 recv_image_hdr_recv_cb,
-                                 dev);
+  fp_device_virtual_listener_read (self->listener,
+                                   self->recv_img_hdr,
+                                   sizeof (self->recv_img_hdr),
+                                   recv_image_hdr_recv_cb,
+                                   self);
 }
 
 static void
-new_connection_cb (GObject *source_object, GAsyncResult *res, gpointer user_data)
+on_listener_connected (FpDeviceVirtualListener *listener,
+                       gpointer                 user_data)
 {
-  g_autoptr(GError) error = NULL;
-  GSocketConnection *connection;
-  GInputStream *stream;
-  FpDeviceVirtualImage *dev = user_data;
+  FpDeviceVirtualImage *self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
 
-  connection = g_socket_listener_accept_finish (G_SOCKET_LISTENER (source_object),
-                                                res,
-                                                NULL,
-                                                &error);
-  if (!connection)
-    {
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        return;
+  self->automatic_finger = TRUE;
 
-      g_warning ("Error accepting a new connection: %s", error->message);
-      start_listen (dev);
-      return;
-    }
-
-  /* Always further connections (but we disconnect them immediately
-   * if we already have a connection). */
-  start_listen (dev);
-  if (dev->connection)
-    {
-      g_io_stream_close (G_IO_STREAM (connection), NULL, NULL);
-      g_object_unref (connection);
-      return;
-    }
-
-  dev->connection = connection;
-  dev->automatic_finger = TRUE;
-  stream = g_io_stream_get_input_stream (G_IO_STREAM (connection));
-
-  recv_image (dev, stream);
-
-  fp_dbg ("Got a new connection!");
-}
-
-static void
-start_listen (FpDeviceVirtualImage *dev)
-{
-  g_socket_listener_accept_async (dev->listener,
-                                  dev->cancellable,
-                                  new_connection_cb,
-                                  dev);
+  recv_image (self);
 }
 
 static void
 dev_init (FpImageDevice *dev)
 {
   g_autoptr(GError) error = NULL;
-  g_autoptr(GSocketListener) listener = NULL;
+  g_autoptr(FpDeviceVirtualListener) listener = NULL;
+  g_autoptr(GCancellable) cancellable = NULL;
   FpDeviceVirtualImage *self = FPI_DEVICE_VIRTUAL_IMAGE (dev);
-  const char *env;
-  g_autoptr(GSocketAddress) addr = NULL;
   G_DEBUG_HERE ();
 
-  self->client_fd = -1;
+  listener = fp_device_virtual_listener_new ();
+  cancellable = g_cancellable_new ();
 
-  env = fpi_device_get_virtual_env (FP_DEVICE (self));
-
-  listener = g_socket_listener_new ();
-  g_socket_listener_set_backlog (listener, 1);
-
-  /* Remove any left over socket. */
-  g_unlink (env);
-
-  addr = g_unix_socket_address_new (env);
-
-  if (!g_socket_listener_add_address (listener,
-                                      addr,
-                                      G_SOCKET_TYPE_STREAM,
-                                      G_SOCKET_PROTOCOL_DEFAULT,
-                                      NULL,
-                                      NULL,
-                                      &error))
+  if (!fp_device_virtual_listener_start (listener,
+                                         fpi_device_get_virtual_env (FP_DEVICE (self)),
+                                         cancellable,
+                                         on_listener_connected,
+                                         self,
+                                         &error))
     {
-      g_warning ("Could not listen on unix socket: %s", error->message);
-
       fpi_image_device_open_complete (dev, g_steal_pointer (&error));
-
       return;
     }
 
   self->listener = g_steal_pointer (&listener);
-  self->cancellable = g_cancellable_new ();
-
-  start_listen (self);
+  self->cancellable = g_steal_pointer (&cancellable);
 
   fpi_image_device_open_complete (dev, NULL);
 }
@@ -301,7 +216,6 @@ dev_deinit (FpImageDevice *dev)
   g_cancellable_cancel (self->cancellable);
   g_clear_object (&self->cancellable);
   g_clear_object (&self->listener);
-  g_clear_object (&self->connection);
 
   fpi_image_device_close_complete (dev, NULL);
 }

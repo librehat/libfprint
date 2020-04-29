@@ -3,6 +3,7 @@
 import sys
 try:
     import gi
+    import re
     import os
 
     from gi.repository import GLib, Gio
@@ -52,19 +53,25 @@ class VirtualDevice(unittest.TestCase):
         unittest.TestCase.setUpClass()
         cls.tmpdir = tempfile.mkdtemp(prefix='libfprint-')
 
-        cls.sockaddr = os.path.join(cls.tmpdir, 'virtual-device.socket')
-        os.environ['FP_VIRTUAL_DEVICE'] = cls.sockaddr
+        driver_name = cls.driver_name if hasattr(cls, 'driver_name') else None
+        if not driver_name:
+            driver_name = re.compile(r'(?<!^)(?=[A-Z])').sub(
+                '_', cls.__name__).lower()
+
+        sock_name = driver_name.replace('_', '-')
+        cls.sockaddr = os.path.join(cls.tmpdir, '{}.socket'.format(sock_name))
+        os.environ['FP_{}'.format(driver_name.upper())] = cls.sockaddr
 
         cls.ctx = FPrint.Context()
 
         cls.dev = None
         for dev in cls.ctx.get_devices():
             # We might have a USB device in the test system that needs skipping
-            if dev.get_driver() == 'virtual_device':
+            if dev.get_driver() == driver_name:
                 cls.dev = dev
                 break
 
-        assert cls.dev is not None, "You need to compile with virtual_device for testing"
+        assert cls.dev is not None, "You need to compile with {} for testing".format(driver_name)
 
     @classmethod
     def tearDownClass(cls):
@@ -163,6 +170,21 @@ class VirtualDevice(unittest.TestCase):
     def test_enroll_verify_no_match(self):
         matching = self.enroll_print(FPrint.Finger.LEFT_RING, match=False)
         self.check_verify(matching, match=False)
+
+
+class VirtualDeviceStorage(VirtualDevice):
+
+     def test_device_properties(self):
+        self.assertEqual(self.dev.get_driver(), 'virtual_device_storage')
+        self.assertEqual(self.dev.get_device_id(), '0')
+        self.assertEqual(self.dev.get_name(),
+            'Virtual device with storage and identification for debugging')
+        self.assertTrue(self.dev.is_open())
+        self.assertEqual(self.dev.get_scan_type(), FPrint.ScanType.SWIPE)
+        self.assertEqual(self.dev.get_nr_enroll_stages(), 5)
+        self.assertTrue(self.dev.supports_identify())
+        self.assertFalse(self.dev.supports_capture())
+        self.assertFalse(self.dev.has_storage())
 
 
 if __name__ == '__main__':

@@ -276,7 +276,10 @@ dev_enroll (FpDevice *dev)
       fp_data = g_variant_new_boolean (success);
       fpi_print_set_type (print, FPI_PRINT_RAW);
       if (fp_device_has_storage (dev))
-        fpi_print_set_device_stored (print, TRUE);
+        {
+          fpi_print_set_device_stored (print, TRUE);
+          g_ptr_array_add (self->prints_storage, g_object_ref (print));
+        }
       g_object_set (print, "fpi-data", fp_data, NULL);
       fpi_device_enroll_complete (dev, g_object_ref (print), NULL);
 

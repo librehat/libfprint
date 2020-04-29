@@ -67,6 +67,7 @@ struct _FpDeviceVirtualDevice
   guint                    line[MAX_LINE_LEN];
 
   GHashTable              *pending_prints; /* key: finger+username value: gboolean */
+  GPtrArray               *prints_storage;
 };
 
 /* Not really final here, but we can do this to share the FpDeviceVirtualDevice

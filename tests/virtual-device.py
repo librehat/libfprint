@@ -174,7 +174,11 @@ class VirtualDevice(unittest.TestCase):
 
 class VirtualDeviceStorage(VirtualDevice):
 
-     def test_device_properties(self):
+    def cleanup_device_storage(self):
+        for print in self.dev.list_prints_sync():
+            self.assertTrue(self.dev.delete_print_sync(print, None))
+
+    def test_device_properties(self):
         self.assertEqual(self.dev.get_driver(), 'virtual_device_storage')
         self.assertEqual(self.dev.get_device_id(), '0')
         self.assertEqual(self.dev.get_name(),
@@ -184,7 +188,30 @@ class VirtualDeviceStorage(VirtualDevice):
         self.assertEqual(self.dev.get_nr_enroll_stages(), 5)
         self.assertTrue(self.dev.supports_identify())
         self.assertFalse(self.dev.supports_capture())
-        self.assertFalse(self.dev.has_storage())
+        self.assertTrue(self.dev.has_storage())
+
+    def test_list_empty(self):
+        self.cleanup_device_storage()
+        self.assertFalse(self.dev.list_prints_sync())
+
+    def test_list_populated(self):
+        self.cleanup_device_storage()
+        print1 = self.enroll_print(FPrint.Finger.RIGHT_THUMB, match=True)
+        print2 = self.enroll_print(FPrint.Finger.LEFT_LITTLE, match=True)
+        self.assertEqual(self.dev.list_prints_sync(), [print1, print2])
+
+    def test_list_delete(self):
+        self.cleanup_device_storage()
+        print = self.enroll_print(FPrint.Finger.RIGHT_RING, match=True)
+        self.assertEqual(self.dev.list_prints_sync(), [print])
+        self.dev.delete_print_sync(print)
+        self.assertFalse(self.dev.list_prints_sync())
+
+    def test_list_delete(self):
+        self.cleanup_device_storage()
+        print = FPrint.Print.new(self.dev)
+        with self.assertRaisesRegex(GLib.GError, 'Print was not found'):
+            self.dev.delete_print_sync(print)
 
 
 if __name__ == '__main__':

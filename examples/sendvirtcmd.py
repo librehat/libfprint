@@ -44,7 +44,7 @@ command = sys.argv[1]
 # Send image through socket
 sockaddr = os.environ['FP_VIRTUAL_DEVICE']
 if not sockaddr:
-    sockaddr = os.environ['FP_VIRTUAL_DEVICE_IDENT']
+    sockaddr = os.environ['FP_VIRTUAL_DEVICE_STORAGE']
 
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 sock.connect(sockaddr)

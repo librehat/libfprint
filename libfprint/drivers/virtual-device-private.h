@@ -53,9 +53,9 @@ struct _FpDeviceVirtualDevice
  * contents without having to use a shared private struct instead. */
 G_DECLARE_FINAL_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP, DEVICE_VIRTUAL_DEVICE, FpDevice)
 
-struct _FpDeviceVirtualDeviceIdent
+struct _FpDeviceVirtualDeviceStorage
 {
   FpDeviceVirtualDevice parent;
 };
 
-G_DECLARE_FINAL_TYPE (FpDeviceVirtualDeviceIdent, fpi_device_virtual_device_ident, FP, DEVICE_VIRTUAL_DEVICE_IDENT, FpDeviceVirtualDevice)
+G_DECLARE_FINAL_TYPE (FpDeviceVirtualDeviceStorage, fpi_device_virtual_device_storage, FP, DEVICE_VIRTUAL_DEVICE_STORAGE, FpDeviceVirtualDevice)

@@ -1,5 +1,5 @@
 /*
- * Virtual driver for "simple" device debugging
+ * Virtual driver for "simple" device debugging with storage
  *
  * Copyright (C) 2020 Bastien Nocera <hadess@hadess.net>
  * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
@@ -26,12 +26,12 @@
  * Using this, it is possible to test libfprint and fprintd.
  */
 
-#define FP_COMPONENT "virtual_device_ident"
+#define FP_COMPONENT "virtual_device_storage"
 
 #include "virtual-device-private.h"
 #include "fpi-log.h"
 
-G_DEFINE_TYPE (FpDeviceVirtualDeviceIdent, fpi_device_virtual_device_ident, fpi_device_virtual_device_get_type ())
+G_DEFINE_TYPE (FpDeviceVirtualDeviceStorage, fpi_device_virtual_device_storage, fpi_device_virtual_device_get_type ())
 
 static void
 dev_identify (FpDevice *dev)
@@ -63,22 +63,23 @@ dev_identify (FpDevice *dev)
 }
 
 static void
-fpi_device_virtual_device_ident_init (FpDeviceVirtualDeviceIdent *self)
+fpi_device_virtual_device_storage_init (FpDeviceVirtualDeviceStorage *self)
 {
 }
 
 static const FpIdEntry driver_ids[] = {
+  { .virtual_envvar = "FP_VIRTUAL_DEVICE_STORAGE" },
   { .virtual_envvar = "FP_VIRTUAL_DEVICE_IDENT" },
   { .virtual_envvar = NULL }
 };
 
 static void
-fpi_device_virtual_device_ident_class_init (FpDeviceVirtualDeviceIdentClass *klass)
+fpi_device_virtual_device_storage_class_init (FpDeviceVirtualDeviceStorageClass *klass)
 {
   FpDeviceClass *dev_class = FP_DEVICE_CLASS (klass);
 
   dev_class->id = FP_COMPONENT;
-  dev_class->full_name = "Virtual device with identification for debugging";
+  dev_class->full_name = "Virtual device with storage and identification for debugging";
   dev_class->id_table = driver_ids;
 
   dev_class->identify = dev_identify;

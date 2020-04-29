@@ -91,7 +91,7 @@ drivers = get_option('drivers').split(',')
 virtual_drivers = [
     'virtual_image',
     'virtual_device',
-    'virtual_device_ident',
+    'virtual_device_storage',
 ]
 
 default_drivers = [

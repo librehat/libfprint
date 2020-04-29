@@ -158,8 +158,8 @@ foreach driver: drivers
     if driver == 'virtual_device'
         drivers_sources += [ 'drivers/virtual-device.c' ]
     endif
-    if driver == 'virtual_device_ident'
-        drivers_sources += [ 'drivers/virtual-device-ident.c' ]
+    if driver == 'virtual_device_storage'
+        drivers_sources += [ 'drivers/virtual-device-storage.c' ]
     endif
     if driver == 'synaptics'
     drivers_sources += [

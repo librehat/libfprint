@@ -256,6 +256,45 @@ start_listen (FpDeviceVirtualDevice *self)
 static void
 dev_init (FpDevice *dev)
 {
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GSocketListener) listener = NULL;
+  g_autoptr(GSocketAddress) addr = NULL;
+  FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (dev);
+  const char *env;
+  G_DEBUG_HERE ();
+
+  self->client_fd = -1;
+
+  env = fpi_device_get_virtual_env (FP_DEVICE (self));
+
+  listener = g_socket_listener_new ();
+  g_socket_listener_set_backlog (listener, 1);
+
+  /* Remove any left over socket. */
+  g_unlink (env);
+
+  addr = g_unix_socket_address_new (env);
+
+  if (!g_socket_listener_add_address (listener,
+                                      addr,
+                                      G_SOCKET_TYPE_STREAM,
+                                      G_SOCKET_PROTOCOL_DEFAULT,
+                                      NULL,
+                                      NULL,
+                                      &error))
+    {
+      g_warning ("Could not listen on unix socket: %s", error->message);
+
+      fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
+
+      return;
+    }
+
+  self->listener = g_steal_pointer (&listener);
+  self->cancellable = g_cancellable_new ();
+
+  start_listen (self);
+
   fpi_device_open_complete (dev, NULL);
 }
 
@@ -313,6 +352,13 @@ dev_enroll (FpDevice *dev)
 static void
 dev_deinit (FpDevice *dev)
 {
+  FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (dev);
+
+  g_cancellable_cancel (self->cancellable);
+  g_clear_object (&self->cancellable);
+  g_clear_object (&self->listener);
+  g_clear_object (&self->connection);
+
   fpi_device_close_complete (dev, NULL);
 }
 
@@ -360,66 +406,16 @@ fpi_device_virtual_device_finalize (GObject *object)
 
   G_DEBUG_HERE ();
 
-  g_cancellable_cancel (self->cancellable);
-  g_clear_object (&self->cancellable);
-  g_clear_object (&self->listener);
-  g_clear_object (&self->connection);
   g_hash_table_destroy (self->pending_prints);
-}
-
-static void
-fpi_device_virtual_device_constructed (GObject *object)
-{
-  g_autoptr(GError) error = NULL;
-  g_autoptr(GSocketListener) listener = NULL;
-  FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (object);
-  const char *env;
-  g_autoptr(GSocketAddress) addr = NULL;
-  G_DEBUG_HERE ();
-
-  self->client_fd = -1;
-
-  env = fpi_device_get_virtual_env (FP_DEVICE (self));
-
-  listener = g_socket_listener_new ();
-  g_socket_listener_set_backlog (listener, 1);
-
-  /* Remove any left over socket. */
-  g_unlink (env);
-
-  addr = g_unix_socket_address_new (env);
-
-  if (!g_socket_listener_add_address (listener,
-                                      addr,
-                                      G_SOCKET_TYPE_STREAM,
-                                      G_SOCKET_PROTOCOL_DEFAULT,
-                                      NULL,
-                                      NULL,
-                                      &error))
-    {
-      g_warning ("Could not listen on unix socket: %s", error->message);
-
-      fpi_device_open_complete (FP_DEVICE (self), g_steal_pointer (&error));
-
-      return;
-    }
-
-  self->listener = g_steal_pointer (&listener);
-  self->cancellable = g_cancellable_new ();
-  self->pending_prints = g_hash_table_new_full (g_str_hash,
-                                                g_str_equal,
-                                                g_free,
-                                                NULL);
-
-  if (G_OBJECT_CLASS (fpi_device_virtual_device_parent_class)->constructed)
-    G_OBJECT_CLASS (fpi_device_virtual_device_parent_class)->constructed (object);
-
-  start_listen (self);
 }
 
 static void
 fpi_device_virtual_device_init (FpDeviceVirtualDevice *self)
 {
+  self->pending_prints = g_hash_table_new_full (g_str_hash,
+                                                g_str_equal,
+                                                g_free,
+                                                NULL);
 }
 
 static const FpIdEntry driver_ids[] = {
@@ -434,7 +430,6 @@ fpi_device_virtual_device_class_init (FpDeviceVirtualDeviceClass *klass)
   FpDeviceClass *dev_class = FP_DEVICE_CLASS (klass);
   GObjectClass *object_class = G_OBJECT_CLASS (klass);
 
-  object_class->constructed = fpi_device_virtual_device_constructed;
   object_class->finalize = fpi_device_virtual_device_finalize;
 
   dev_class->id = FP_COMPONENT;

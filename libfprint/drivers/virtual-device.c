@@ -28,37 +28,9 @@
 
 #define FP_COMPONENT "virtual_device"
 
+#include "virtual-device-private.h"
 #include "fpi-log.h"
 
-#include "../fpi-device.h"
-
-#include <glib/gstdio.h>
-#include <gio/gio.h>
-#include <gio/gunixsocketaddress.h>
-
-#define MAX_LINE_LEN 1024
-
-enum {
-  VIRTUAL_DEVICE,
-  VIRTUAL_DEVICE_IDENT
-};
-
-struct _FpDeviceVirtualDevice
-{
-  FpDevice           parent;
-
-  GSocketListener   *listener;
-  GSocketConnection *connection;
-  GCancellable      *cancellable;
-
-  gint               socket_fd;
-  gint               client_fd;
-  guint              line[MAX_LINE_LEN];
-
-  GHashTable        *pending_prints; /* key: finger+username value: gboolean */
-};
-
-G_DECLARE_FINAL_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP, DEVICE_VIRTUAL_DEVICE, FpDevice)
 G_DEFINE_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP_TYPE_DEVICE)
 
 static void start_listen (FpDeviceVirtualDevice *self);
@@ -336,7 +308,7 @@ dev_enroll (FpDevice *dev)
 
       fp_data = g_variant_new_boolean (success);
       fpi_print_set_type (print, FPI_PRINT_RAW);
-      if (fpi_device_get_driver_data (dev) == VIRTUAL_DEVICE_IDENT)
+      if (fp_device_has_storage (dev))
         fpi_print_set_device_stored (print, TRUE);
       g_object_set (print, "fpi-data", fp_data, NULL);
       fpi_device_enroll_complete (dev, print, NULL);
@@ -362,43 +334,6 @@ dev_deinit (FpDevice *dev)
   fpi_device_close_complete (dev, NULL);
 }
 
-static gboolean
-dev_supports_identify (FpDevice *dev)
-{
-  return fpi_device_get_driver_data (dev) == VIRTUAL_DEVICE_IDENT;
-}
-
-static void
-dev_identify (FpDevice *dev)
-{
-  GPtrArray *templates;
-  FpPrint *result = NULL;
-  guint i;
-
-  g_assert (fpi_device_get_driver_data (dev) == VIRTUAL_DEVICE_IDENT);
-
-  fpi_device_get_identify_data (dev, &templates);
-
-  for (i = 0; i < templates->len; i++)
-    {
-      FpPrint *template = g_ptr_array_index (templates, i);
-      g_autoptr(GVariant) data = NULL;
-      gboolean success;
-
-      g_object_get (dev, "fpi-data", &template, NULL);
-      success = g_variant_get_boolean (data);
-      if (success)
-        {
-          result = template;
-          break;
-        }
-    }
-
-  if (result)
-    fpi_device_identify_report (dev, result, NULL, NULL);
-  fpi_device_identify_complete (dev, NULL);
-}
-
 static void
 fpi_device_virtual_device_finalize (GObject *object)
 {
@@ -419,8 +354,7 @@ fpi_device_virtual_device_init (FpDeviceVirtualDevice *self)
 }
 
 static const FpIdEntry driver_ids[] = {
-  { .virtual_envvar = "FP_VIRTUAL_DEVICE", .driver_data = VIRTUAL_DEVICE },
-  { .virtual_envvar = "FP_VIRTUAL_DEVICE_IDENT", .driver_data = VIRTUAL_DEVICE_IDENT },
+  { .virtual_envvar = "FP_VIRTUAL_DEVICE", },
   { .virtual_envvar = NULL }
 };
 
@@ -442,7 +376,4 @@ fpi_device_virtual_device_class_init (FpDeviceVirtualDeviceClass *klass)
   dev_class->close = dev_deinit;
   dev_class->verify = dev_verify;
   dev_class->enroll = dev_enroll;
-
-  dev_class->identify = dev_identify;
-  dev_class->supports_identify = dev_supports_identify;
 }

@@ -121,6 +121,8 @@ fp_image_device_close (FpDevice *device)
    *  3. We are deactivating
    *     -> handled by deactivate_complete */
 
+  g_print("CLosing, active %d, non-inactive %d\n",priv->active, priv->state != FPI_IMAGE_DEVICE_STATE_INACTIVE);
+
   if (!priv->active)
     cls->img_close (self);
   else if (priv->state != FPI_IMAGE_DEVICE_STATE_INACTIVE)
@@ -135,6 +137,8 @@ fp_image_device_cancel_action (FpDevice *device)
   FpiDeviceAction action;
 
   action = fpi_device_get_current_action (device);
+
+  g_print("Cancel action, is active %d, action %d\n",priv->active, action);
 
   /* We can only cancel capture operations, in that case, deactivate and return
    * an error immediately. */
@@ -152,6 +156,10 @@ fp_image_device_cancel_action (FpDevice *device)
                                g_error_new (G_IO_ERROR,
                                             G_IO_ERROR_CANCELLED,
                                             "Device operation was cancelled"));
+    }
+  else if (action == FPI_DEVICE_ACTION_OPEN)
+    {
+      fp_image_device_close (device);
     }
 }
 

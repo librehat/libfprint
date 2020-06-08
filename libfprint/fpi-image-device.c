@@ -17,6 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fpi-device.h"
 #define FP_COMPONENT "image_device"
 #include "fpi-log.h"
 
@@ -113,11 +114,12 @@ static void
 fp_image_device_enroll_maybe_await_finger_on (FpImageDevice *self)
 {
   FpImageDevicePrivate *priv = fp_image_device_get_instance_private (self);
-
+  g_print("priv->enroll_await_on_pending %d\n",  priv->enroll_await_on_pending);
   if (priv->enroll_await_on_pending)
     {
       priv->enroll_await_on_pending = FALSE;
       fp_image_device_change_state (self, FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON);
+      g_print("CHanging state to FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON\n");
     }
   else
     {
@@ -323,6 +325,7 @@ fpi_image_device_report_finger_status (FpImageDevice *self,
     }
   else if (!present && priv->state == FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_OFF)
     {
+      g_print("We're here and enrolling? %d\n", action == FPI_DEVICE_ACTION_ENROLL);
       /* We need to deactivate or continue to await finger */
 
       /* There are three possible situations:

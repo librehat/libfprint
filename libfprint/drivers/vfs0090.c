@@ -1609,6 +1609,7 @@ static void scan_error_handler_ssm(FpiSsm *ssm, FpDevice *dev)
 	GError *error = NULL;
 
 	switch (fpi_ssm_get_cur_state(ssm)) {
+		/* Invert? first send error, then blink? */
 	case SCAN_ERROR_STATE_LED_BLINK:
 		async_data_exchange(dev, DATA_EXCHANGE_ENCRYPTED,
 				    LED_RED_BLINK, G_N_ELEMENTS(LED_RED_BLINK),
@@ -1971,6 +1972,9 @@ static void dev_close(FpImageDevice *idev)
 {
 	FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090(idev);
 	GError *error = NULL;
+
+	// Handle properly cancellation during close!
+	// g_cancellable_cancel(vdev->cancellable);
 
 	if (vfs0090_deinit(vdev, &error))
 		fpi_image_device_close_complete(idev, error);

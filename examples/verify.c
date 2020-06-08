@@ -23,6 +23,7 @@
 
 #include <stdio.h>
 #include <libfprint/fprint.h>
+#include <libfprint/fp-image-device.h>
 #include <glib-unix.h>
 
 #include "storage.h"
@@ -30,9 +31,11 @@
 
 typedef struct _VerifyData
 {
+  FpDevice     *dev;
   GMainLoop    *loop;
   GCancellable *cancellable;
   unsigned int  sigint_handler;
+  unsigned int  retry_id;
   FpFinger      finger;
   int           ret_value;
 } VerifyData;
@@ -78,6 +81,25 @@ verify_quit (FpDevice   *dev,
 static void start_verification (FpDevice   *dev,
                                 VerifyData *verify_data);
 
+static gboolean retry_verification_timeout (gpointer user_data)
+{
+  VerifyData *verify_data = user_data;
+  FpDevice *dev = verify_data->dev;
+  char buffer[20];
+
+  g_print ("Verify again? [Y/n]? ");
+  if (fgets (buffer, sizeof (buffer), stdin) &&
+      (buffer[0] == 'Y' || buffer[0] == 'y' || buffer[0] == '\n'))
+    {
+      start_verification (dev, verify_data);
+      return G_SOURCE_REMOVE;
+    }
+
+  verify_quit (dev, verify_data);
+
+  return G_SOURCE_REMOVE;
+}
+
 static void
 on_verify_completed (FpDevice *dev, GAsyncResult *res, void *user_data)
 {
@@ -85,7 +107,6 @@ on_verify_completed (FpDevice *dev, GAsyncResult *res, void *user_data)
 
   g_autoptr(FpPrint) print = NULL;
   g_autoptr(GError) error = NULL;
-  char buffer[20];
   gboolean match;
 
   if (!fp_device_verify_finish (dev, res, &match, &print, &error))
@@ -100,15 +121,11 @@ on_verify_completed (FpDevice *dev, GAsyncResult *res, void *user_data)
         }
     }
 
-  g_print ("Verify again? [Y/n]? ");
-  if (fgets (buffer, sizeof (buffer), stdin) &&
-      (buffer[0] == 'Y' || buffer[0] == 'y' || buffer[0] == '\n'))
-    {
-      start_verification (dev, verify_data);
-      return;
-    }
-
-  verify_quit (dev, verify_data);
+  g_print ("Verify completed\n");
+  if (FP_IS_IMAGE_DEVICE (dev))
+    verify_data->retry_id = g_timeout_add (100, retry_verification_timeout, verify_data);
+  else
+    retry_verification_timeout (verify_data);
 }
 
 static void
@@ -116,6 +133,8 @@ on_match_cb (FpDevice *dev, FpPrint *match, FpPrint *print,
              gpointer user_data, GError *error)
 {
   VerifyData *verify_data = user_data;
+
+  g_print("match cb %p, print %p\n",match,print);
 
   if (error)
     {
@@ -256,7 +275,7 @@ start_verification (FpDevice *dev, VerifyData *verify_data)
 
       g_print ("Print loaded. Time to verify!\n");
       fp_device_verify (dev, verify_print, verify_data->cancellable,
-                        NULL, NULL, NULL,
+                        on_match_cb, verify_data, NULL,
                         (GAsyncReadyCallback) on_verify_completed,
                         verify_data);
     }
@@ -286,6 +305,7 @@ sigint_cb (void *user_data)
 {
   VerifyData *verify_data = user_data;
 
+  g_clear_handle_id (&verify_data->retry_id, g_source_remove);
   g_cancellable_cancel (verify_data->cancellable);
 
   return G_SOURCE_CONTINUE;
@@ -319,6 +339,7 @@ main (void)
     }
 
   verify_data = g_new0 (VerifyData, 1);
+  verify_data->dev = dev;
   verify_data->ret_value = EXIT_FAILURE;
   verify_data->loop = g_main_loop_new (NULL, FALSE);
   verify_data->cancellable = g_cancellable_new ();

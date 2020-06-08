@@ -51,6 +51,8 @@
 /* The main driver structure */
 struct _FpiDeviceVfs0090 {
 	FpImageDevice parent;
+	gboolean activated;
+	gboolean deactivating;
 
 	/* Buffer for saving usb data through states */
 	unsigned char *buffer;
@@ -124,8 +126,7 @@ static void print_hex(unsigned char *data, int len) {
 	print_hex_gn(data, len, 1);
 }
 
-static void start_reactivate_subsm(FpDevice *dev,
-				   FpiSsm *parent_ssm);
+static void start_reactivate_ssm(FpDevice *dev);
 
 /* remove emmmeeme */
 static unsigned char *tls_encrypt(FpImageDevice *idev,
@@ -1359,6 +1360,14 @@ static void init_ssm(FpiSsm *ssm, FpDevice *dev)
 	}
 }
 
+static FpiImageDeviceState get_imgdev_state(FpImageDevice *idev)
+{
+	FpiImageDeviceState state;
+
+	g_object_get(idev, "fpi-image-device-state", &state, NULL);
+	return state;
+}
+
 /* Callback for dev_open ssm */
 static void dev_open_callback(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
@@ -1386,6 +1395,8 @@ static void dev_open(FpImageDevice *idev)
 	GError *error = NULL;
 	SECStatus secs_status;
 	int usb_config;
+
+	fp_dbg("Opening device");
 
 	secs_status = NSS_NoDB_Init(NULL);
 	if (secs_status != SECSuccess) {
@@ -1573,14 +1584,8 @@ static void finger_image_download_ssm(FpiSsm *ssm, FpDevice *dev)
 		break;
 
 	case IMAGE_DOWNLOAD_STATE_SUBMIT_RESULT:
-	//FIXME
 		fpi_image_device_report_finger_status(idev, FALSE);
-
-		if (fpi_device_get_current_action(FP_DEVICE(idev)) == FPI_DEVICE_ACTION_ENROLL) {
-			start_reactivate_subsm(dev, ssm);
-		} else {
-			fpi_ssm_mark_completed(ssm);
-		}
+		fpi_ssm_next_state(ssm);
 		break;
 
 	default:
@@ -1625,10 +1630,7 @@ static void scan_error_handler_callback(FpiSsm *ssm, FpDevice *dev, GError *erro
 
 		fpi_ssm_mark_failed(error_data->parent_ssm, error);
 	} else {
-		fpi_image_device_retry_scan(FP_IMAGE_DEVICE(dev),
-					    error_data->retry);
-		fpi_ssm_jump_to_state(error_data->parent_ssm,
-				      SCAN_STATE_WAITING_FOR_FINGER);
+		fpi_ssm_mark_completed(error_data->parent_ssm);
 	}
 
 	g_free(error_data);
@@ -1638,6 +1640,7 @@ static void scan_error_handler_ssm(FpiSsm *ssm, FpDevice *dev)
 {
 	FpImageDevice *idev = FP_IMAGE_DEVICE(dev);
 	FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090(idev);
+	struct scan_error_handler_data_t *error_data = fpi_ssm_get_data(ssm);
 	GError *error = NULL;
 
 	switch (fpi_ssm_get_cur_state(ssm)) {
@@ -1649,12 +1652,11 @@ static void scan_error_handler_ssm(FpiSsm *ssm, FpDevice *dev)
 		break;
 
 	case SCAN_ERROR_STATE_REACTIVATE_REQUEST:
-		start_reactivate_subsm(dev, ssm);
-
-		if (fpi_ssm_get_error(ssm))
-			fpi_image_device_session_error(idev, fpi_ssm_get_error(ssm));
-
+		fpi_image_device_retry_scan(FP_IMAGE_DEVICE(dev),
+					    error_data->retry);
 		fpi_image_device_report_finger_status(idev, FALSE);
+
+		fpi_ssm_next_state(ssm);
 		break;
 
 	default:
@@ -1779,16 +1781,7 @@ static void activate_device_interrupt_callback(FpImageDevice *idev, gpointer dat
 						     vdev->buffer_length);
 
 		if (interrupt_type == VFS_SCAN_WAITING_FOR_FINGER) {
-			FpDevice *dev = FP_DEVICE(idev);
-			if (fpi_device_get_current_action(FP_DEVICE(idev)) == FPI_DEVICE_ACTION_ENROLL) {
-				FpiSsm *child_ssm;
-				child_ssm = fpi_ssm_new(dev,
-							finger_scan_ssm,
-							SCAN_STATE_LAST);
-				fpi_ssm_start_subsm(ssm, child_ssm);
-			} else {
-				fpi_ssm_next_state(ssm);
-			}
+			fpi_ssm_mark_completed(ssm);
 		} else {
 			error = fpi_device_error_new_msg(FP_DEVICE_ERROR_PROTO,
 							 "Unexpected device interrupt "
@@ -1849,16 +1842,15 @@ static void activate_ssm(FpiSsm *ssm, FpDevice *dev)
 static void dev_activate_callback(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
 	FpImageDevice *idev = FP_IMAGE_DEVICE(dev);
+	FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090(idev);
 
 	if (!g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED) && error) {
 		fp_err("Activation failed failed at state %d, unexpected "
 		       "device reply during activation", fpi_ssm_get_cur_state(ssm));
 	}
 
-	fpi_image_device_activate_complete(idev, fpi_ssm_get_error(ssm));
-
-	if (!fpi_ssm_get_error(ssm))
-		start_finger_scan(idev);
+	fpi_image_device_activate_complete(idev, error);
+	vdev->activated = TRUE;
 }
 
 static void dev_activate(FpImageDevice *idev)
@@ -1926,12 +1918,20 @@ static void dev_deactivate_callback(FpiSsm *ssm, FpDevice *dev, GError *error)
 	g_clear_object(&vdev->cancellable);
 
 	fpi_image_device_deactivate_complete(idev, NULL);
+
+	vdev->activated = FALSE;
+	vdev->deactivating = FALSE;
 }
 
 static void dev_deactivate(FpImageDevice *idev)
 {
+	FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090(idev);
 	FpiSsm *ssm;
 
+	if (vdev->deactivating)
+		return;
+
+	vdev->deactivating = TRUE;
 	ssm = fpi_ssm_new(FP_DEVICE(idev), deactivate_ssm,
 			  DEACTIVATE_STATE_LAST);
 	fpi_ssm_start(ssm, dev_deactivate_callback);
@@ -1939,6 +1939,7 @@ static void dev_deactivate(FpImageDevice *idev)
 
 static void reactivate_ssm(FpiSsm *ssm, FpDevice *dev)
 {
+	FpImageDevice *idev = FP_IMAGE_DEVICE(dev);
 	FpiSsm *child_ssm = NULL;
 	GError *error = NULL;
 
@@ -1954,6 +1955,12 @@ static void reactivate_ssm(FpiSsm *ssm, FpDevice *dev)
 		child_ssm = fpi_ssm_new(dev, activate_ssm,
 				        ACTIVATE_STATE_LAST);
 		break;
+	case REACTIVATE_STATE_MAYBE_SCAN:
+		if (get_imgdev_state(idev) == FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON)
+			start_finger_scan(idev);
+
+		fpi_ssm_next_state(ssm);
+		break;
 	default:
 		error = fpi_device_error_new_msg(FP_DEVICE_ERROR_GENERAL,
 						 "Unknown reactivate state");
@@ -1964,14 +1971,19 @@ static void reactivate_ssm(FpiSsm *ssm, FpDevice *dev)
 		fpi_ssm_start_subsm(ssm, child_ssm);
 }
 
-static void start_reactivate_subsm(FpDevice *dev,
-				   FpiSsm *parent_ssm)
+static void reactivate_ssm_callback(FpiSsm *ssm, FpDevice *dev, GError *error)
+{
+	if (error)
+		fpi_image_device_session_error(FP_IMAGE_DEVICE(dev), error);
+}
+
+static void start_reactivate_ssm(FpDevice *dev)
 {
 	FpiSsm *ssm;
 
 	ssm = fpi_ssm_new(dev, reactivate_ssm,
 			  REACTIVATE_STATE_LAST);
-	fpi_ssm_start_subsm(parent_ssm, ssm);
+	fpi_ssm_start(ssm, reactivate_ssm_callback);
 }
 
 static void dev_close(FpImageDevice *idev)
@@ -1990,6 +2002,26 @@ static void dev_close(FpImageDevice *idev)
 	vdev->buffer_length = 0;
 
 	fpi_image_device_close_complete(idev, error);
+}
+
+static void
+dev_change_state (FpImageDevice *idev, FpiImageDeviceState state)
+{
+	FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090(idev);
+
+	switch (state) {
+	case FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON:
+		if (!vdev->activated)
+			start_finger_scan(idev);
+		else
+			start_reactivate_ssm(FP_DEVICE(idev));
+		break;
+
+	case FPI_IMAGE_DEVICE_STATE_CAPTURE:
+	case FPI_IMAGE_DEVICE_STATE_INACTIVE:
+	case FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_OFF:
+		break;
+	}
 }
 
 /* Usb id table of device */
@@ -2017,6 +2049,7 @@ static void fpi_device_vfs0090_class_init(FpiDeviceVfs0090Class *klass)
 	img_class->img_close = dev_close;
 	img_class->activate = dev_activate;
 	img_class->deactivate = dev_deactivate;
+	img_class->change_state = dev_change_state;
 
 	img_class->bz3_threshold = 12;
 

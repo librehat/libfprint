@@ -391,7 +391,7 @@ fpi_device_action_is_cancelled (FpDevice *device)
 
   cancellable = g_task_get_cancellable (priv->current_task);
 
-  return cancellable ? g_cancellable_is_cancelled (cancellable) : FALSE;
+  return g_cancellable_is_cancelled (cancellable);
 }
 
 /**
@@ -593,7 +593,8 @@ fpi_device_action_error (FpDevice *device,
 
   if (error != NULL)
     {
-      g_debug ("Device reported generic error during action; action was: %i", priv->current_action);
+      g_debug ("Device reported generic error %s during action; action was: %i",
+               error->message, priv->current_action);
     }
   else
     {

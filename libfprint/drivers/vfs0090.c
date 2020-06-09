@@ -820,7 +820,8 @@ on_data_exchange_cb (FpiUsbTransfer *transfer, FpDevice *dev,
       else
         error = fpi_device_error_new (FP_DEVICE_ERROR_PROTO);
     }
-  else
+
+  if (error)
     {
       if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         fp_err ("Data exchange failed at state %d, usb error: %s",
@@ -1544,6 +1545,9 @@ dev_open (FpDevice *dev)
 
   if (!vfs0090_init (vdev))
     return;
+
+  // Handle properly cancel while opening, closing opened lubusb devs!
+  // g_cancellable_cancel(vdev->cancellable);
 
   /* Clearing previous device state */
   ssm = fpi_ssm_new (dev, init_ssm, INIT_STATE_LAST);

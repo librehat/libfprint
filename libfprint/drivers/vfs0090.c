@@ -59,11 +59,10 @@ struct _FpiDeviceVfs0090
   FpPrint       *enrolled_print;
   FpImage       *captured_image;
 
+  FpiUsbTransfer *current_transfer;
+
   /* TLS keyblock for current session */
   unsigned char key_block[0x120];
-
-  /* Current action cancellable */
-  GCancellable *cancellable;
 };
 
 G_DEFINE_TYPE (FpiDeviceVfs0090, fpi_device_vfs0090, FP_TYPE_DEVICE)
@@ -192,7 +191,7 @@ async_write_callback (FpiUsbTransfer *transfer, FpDevice *device,
     }
 
   vdev = FPI_DEVICE_VFS0090 (device);
-  g_clear_object (&vdev->cancellable);
+  vdev->current_transfer = NULL;
 
   if (error)
     {
@@ -225,8 +224,7 @@ async_write_to_usb (FpDevice *dev,
   FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090 (dev);
   FpiUsbTransfer *transfer;
 
-  g_assert_true (!vdev->cancellable ||
-                 g_cancellable_is_cancelled (vdev->cancellable));
+  g_assert_null (vdev->current_transfer);
 
   op_data = g_new0 (struct async_usb_operation_data_t, 1);
   op_data->callback = callback;
@@ -236,9 +234,9 @@ async_write_to_usb (FpDevice *dev,
   fpi_usb_transfer_fill_bulk_full (transfer, EP_OUT,
                                    (guint8 *) data, data_size, NULL);
 
-  g_set_object (&vdev->cancellable, g_cancellable_new ());
+  vdev->current_transfer = transfer;
   fpi_usb_transfer_submit (transfer, VFS_USB_TIMEOUT,
-                           vdev->cancellable,
+                           fpi_device_get_cancellable (dev),
                            async_write_callback, op_data);
 }
 
@@ -257,7 +255,7 @@ async_read_callback (FpiUsbTransfer *transfer, FpDevice *device,
 
   vdev = FPI_DEVICE_VFS0090 (device);
   vdev->buffer_length = 0;
-  g_clear_object (&vdev->cancellable);
+  vdev->current_transfer = NULL;
 
   if (error)
     {
@@ -285,11 +283,9 @@ async_read_from_usb (FpDevice *dev, FpiTransferType transfer_type,
   FpiUsbTransfer *transfer;
   guint timeout = VFS_USB_TIMEOUT;
 
-  g_assert_true (!vdev->cancellable ||
-                 g_cancellable_is_cancelled (vdev->cancellable));
+  g_assert_null (vdev->current_transfer);
 
   transfer = fpi_usb_transfer_new (dev);
-  g_set_object (&vdev->cancellable, g_cancellable_new ());
 
   op_data = g_new0 (struct async_usb_operation_data_t, 1);
   op_data->callback = callback;
@@ -313,8 +309,9 @@ async_read_from_usb (FpDevice *dev, FpiTransferType transfer_type,
       g_assert_not_reached ();
     }
 
+  vdev->current_transfer = transfer;
   fpi_usb_transfer_submit (transfer, timeout,
-                           vdev->cancellable,
+                           fpi_device_get_cancellable (dev),
                            async_read_callback, op_data);
 }
 
@@ -1481,7 +1478,9 @@ dev_open_callback (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     fpi_device_action_error (dev, error);
 
-  if (!g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+  g_print("OPened with error? %p\n", error);
+
+  if (!fpi_device_action_is_cancelled(dev))
     fpi_device_open_complete (dev, error);
   else
     vfs0090_deinit (FPI_DEVICE_VFS0090 (dev), NULL);
@@ -2227,13 +2226,6 @@ deactivate_ssm (FpiSsm *ssm, FpDevice *dev)
 
   switch (fpi_ssm_get_cur_state (ssm))
     {
-    case DEACTIVATE_STOP_TRANSFER:
-      g_cancellable_cancel (vdev->cancellable);
-      g_clear_object (&vdev->cancellable);
-
-      fpi_ssm_next_state (ssm);
-      break;
-
     case DEACTIVATE_STATE_SEQ_1:
     case DEACTIVATE_STATE_SEQ_2:
       send_deactivate_sequence (vdev, ssm, fpi_ssm_get_cur_state (ssm) - DEACTIVATE_STATE_SEQ_1);
@@ -2302,7 +2294,6 @@ dev_deactivate_callback (FpiSsm *ssm, FpDevice *dev, GError *error)
         }
     }
 
-  g_clear_object (&vdev->cancellable);
   g_clear_object (&vdev->enrolled_print);
   g_clear_object (&vdev->captured_image);
   g_clear_error (&vdev->action_error);
@@ -2462,17 +2453,16 @@ dev_cancel (FpDevice *dev)
 {
   FpiDeviceVfs0090 *vdev = FPI_DEVICE_VFS0090 (dev);
 
+  g_print("Got cancellation! %d\n", fpi_device_action_is_cancelled(dev));
+
   if (!fp_device_is_open (dev))
-    {
-      g_cancellable_cancel (vdev->cancellable);
-      return;
-    }
+    return;
+
+  vdev->current_transfer = NULL;
 
   if (!vdev->activated)
     {
       GError *error = NULL;
-
-      g_cancellable_cancel (vdev->cancellable);
 
       if (!vfs0090_deinit (vdev, &error))
         fpi_device_action_error (dev, error);

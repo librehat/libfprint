@@ -19,6 +19,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fpi-enums.h"
 #define FP_COMPONENT "example-enroll"
 
 #include <stdio.h>

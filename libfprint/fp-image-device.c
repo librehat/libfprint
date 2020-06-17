@@ -153,6 +153,10 @@ fp_image_device_cancel_action (FpDevice *device)
                                             G_IO_ERROR_CANCELLED,
                                             "Device operation was cancelled"));
     }
+  else if (action == FPI_DEVICE_ACTION_OPEN)
+    {
+      fp_image_device_close (device);
+    }
 }
 
 static void

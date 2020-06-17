@@ -263,6 +263,70 @@ invert_colors (guint8 *data, gint width, gint height)
     data[i] = 0xff - data[i];
 }
 
+#include <stdio.h>
+#include <string.h>
+
+static void
+print_hex_gn (unsigned char *data, int len, int sz)
+{
+  if (!len || !data)
+    return;
+
+  for (int i = 0; i < len; i++)
+    {
+      if ((i % 16) == 0)
+        {
+          if (i != 0)
+            {
+              g_print (" | ");
+              for (int j = i - 16; j < i; ++j)
+                g_print ("%c", isprint (data[j * sz]) ? data[j * sz] : '.');
+              g_print ("\n");
+            }
+          g_print ("%04x ", i);
+        }
+      else if ((i % 8) == 0)
+        {
+          g_print (" ");
+        }
+      g_print ("%02x ", data[i * sz]);
+    }
+
+  if (((len - 1) % 16) != 0)
+    {
+      int j;
+      int missing_bytes = (15 - (len - 1) % 16);
+      int missing_spaces = missing_bytes * 3 + (missing_bytes >= 8 ? 1 : 0);
+
+      for (int i = 0; i < missing_spaces; ++i)
+        g_print (" ");
+
+      g_print (" | ");
+
+      for (j = len - 1; j > 0 && (j % 16) != 0; --j)
+        ;
+      for (; j < len; ++j)
+        g_print ("%c", isprint (data[j * sz]) ? data[j * sz] : '.');
+    }
+  puts ("");
+}
+
+#if 0
+static void
+print_hex_string (char *data, int len)
+{
+  for (int i = 0; i < len; i++)
+    g_print ("%02x", data[i]);
+  puts ("");
+}
+#endif
+
+static void
+print_hex (unsigned char *data, int len)
+{
+  print_hex_gn (data, len, 1);
+}
+
 static void
 fp_image_detect_minutiae_thread_func (GTask        *task,
                                       gpointer      source_object,
@@ -309,6 +373,8 @@ fp_image_detect_minutiae_thread_func (GTask        *task,
 
   data->binarized = g_steal_pointer (&bdata);
   data->minutiae = minutiae;
+
+  print_hex(data->binarized, strlen(data->binarized));
 
   if (r)
     {

@@ -47,17 +47,11 @@ enum {
 enum sonly_kill_transfers_action {
   NOT_KILLING = 0,
 
-  /* abort a SSM with an error code */
-  ABORT_SSM,
-
   /* report an image session error */
   IMG_SESSION_ERROR,
 
   /* iterate a SSM to the next state */
   ITERATE_SSM,
-
-  /* call a callback */
-  EXEC_CALLBACK,
 };
 
 enum sonly_fs {
@@ -97,13 +91,9 @@ struct _FpiDeviceUpeksonly
 
   enum sonly_kill_transfers_action killing_transfers;
   GError                          *kill_error;
-  union
-  {
-    FpiSsm *kill_ssm;
-    void    (*kill_cb)(FpImageDevice *dev);
-  };
+  FpiSsm                          *kill_ssm;
 
-  struct fpi_line_asmbl_ctx assembling_ctx;
+  struct fpi_line_asmbl_ctx        assembling_ctx;
 };
 G_DECLARE_FINAL_TYPE (FpiDeviceUpeksonly, fpi_device_upeksonly, FPI,
                       DEVICE_UPEKSONLY, FpImageDevice);
@@ -176,11 +166,6 @@ last_transfer_killed (FpImageDevice *dev)
 
   switch (self->killing_transfers)
     {
-    case ABORT_SSM:
-      fp_dbg ("abort ssm error %s", self->kill_error->message);
-      fpi_ssm_mark_failed (self->kill_ssm, g_steal_pointer (&self->kill_error));
-      return;
-
     case ITERATE_SSM:
       fp_dbg ("iterate ssm");
       fpi_ssm_next_state (self->kill_ssm);
@@ -531,6 +516,14 @@ img_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
       return;
     }
 
+  /* NOTE: The old code assume 4096 bytes are received each time
+   * but there is no reason we need to enforce that. However, we
+   * always need full lines. */
+  if (transfer->actual_length % 64 != 0)
+    error = fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+                                      "Data packets need to be multiple of 64 bytes, got %zi bytes",
+                                      transfer->actual_length);
+
   if (error)
     {
       fp_warn ("bad status %s, terminating session", error->message);
@@ -551,7 +544,7 @@ img_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
    * the first 2 bytes are a sequence number
    * then there are 62 bytes for image data
    */
-  for (i = 0; i < 4096; i += 64)
+  for (i = 0; i + 64 <= transfer->actual_length; i += 64)
     {
       if (!is_capturing (self))
         return;
@@ -560,7 +553,7 @@ img_data_cb (FpiUsbTransfer *transfer, FpDevice *device,
 
   if (is_capturing (self))
     {
-      fpi_usb_transfer_submit (transfer,
+      fpi_usb_transfer_submit (fpi_usb_transfer_ref (transfer),
                                0,
                                self->img_cancellable,
                                img_data_cb,
@@ -588,6 +581,8 @@ write_regs_finished (struct write_regs_data *wrdata, GError *error)
     fpi_ssm_next_state (wrdata->ssm);
   else
     fpi_ssm_mark_failed (wrdata->ssm, error);
+
+  g_free (wrdata);
 }
 
 static void write_regs_iterate (struct write_regs_data *wrdata);
@@ -634,9 +629,9 @@ write_regs_iterate (struct write_regs_data *wrdata)
                                  1);
   transfer->short_is_error = TRUE;
   transfer->ssm = wrdata->ssm;
-  fpi_usb_transfer_submit (transfer, CTRL_TIMEOUT, NULL, write_regs_cb, NULL);
-
   transfer->buffer[0] = regwrite->value;
+
+  fpi_usb_transfer_submit (transfer, CTRL_TIMEOUT, NULL, write_regs_cb, wrdata);
 }
 
 static void
@@ -675,10 +670,10 @@ sm_write_reg (FpiSsm        *ssm,
                                  1);
   transfer->short_is_error = TRUE;
   transfer->ssm = ssm;
+  transfer->buffer[0] = value;
+
   fpi_usb_transfer_submit (transfer, CTRL_TIMEOUT, NULL,
                            fpi_ssm_usb_transfer_cb, NULL);
-
-  transfer->buffer[0] = value;
 }
 
 static void
@@ -908,7 +903,7 @@ capsm_fire_bulk (FpiSsm   *ssm,
   self->img_cancellable = g_cancellable_new ();
   for (i = 0; i < self->img_transfers->len; i++)
     {
-      fpi_usb_transfer_submit (g_ptr_array_index (self->img_transfers, i),
+      fpi_usb_transfer_submit (fpi_usb_transfer_ref (g_ptr_array_index (self->img_transfers, i)),
                                0,
                                self->img_cancellable,
                                img_data_cb,
@@ -1406,8 +1401,12 @@ dev_activate (FpImageDevice *dev)
   self->capturing = FALSE;
 
   self->num_flying = 0;
+  self->img_transfers = g_ptr_array_new_with_free_func ((GFreeFunc) fpi_usb_transfer_unref);
 
-  for (i = 0; i < self->img_transfers->len; i++)
+  /* This might seem odd, but we do need multiple in-flight URBs so that
+   * we never stop polling the device for more data.
+   */
+  for (i = 0; i < NUM_BULK_TRANSFERS; i++)
     {
       FpiUsbTransfer *transfer;
 

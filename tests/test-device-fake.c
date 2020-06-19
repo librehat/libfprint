@@ -100,7 +100,10 @@ fpi_device_fake_enroll (FpDevice *device)
   fpi_device_get_enroll_data (device, (FpPrint **) &fake_dev->action_data);
 
   if (!print && !fake_dev->ret_error)
-    fpi_device_get_enroll_data (device, &print);
+    {
+      fpi_device_get_enroll_data (device, &print);
+      fpi_print_set_type (print, FPI_PRINT_RAW);
+    }
 
   fpi_device_enroll_complete (device,
                               print ? g_object_ref (print) : NULL,
@@ -189,6 +192,7 @@ static void
 fpi_device_fake_capture (FpDevice *device)
 {
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  gboolean wait_for_finger;
 
   fake_dev->last_called_function = fpi_device_fake_capture;
   g_assert_cmpuint (fpi_device_get_current_action (device), ==, FPI_DEVICE_ACTION_CAPTURE);
@@ -199,7 +203,8 @@ fpi_device_fake_capture (FpDevice *device)
       return;
     }
 
-  fpi_device_get_capture_data (device, (gboolean *) &fake_dev->action_data);
+  fpi_device_get_capture_data (device, &wait_for_finger);
+  fake_dev->action_data = GINT_TO_POINTER (wait_for_finger);
   fpi_device_capture_complete (device, fake_dev->ret_image, fake_dev->ret_error);
 }
 
@@ -234,7 +239,7 @@ fpi_device_fake_delete (FpDevice *device)
       return;
     }
 
-  fpi_device_get_delete_data (device, (gpointer) (&fake_dev->action_data));
+  fpi_device_get_delete_data (device, (FpPrint **) (&fake_dev->action_data));
   fpi_device_delete_complete (device, fake_dev->ret_error);
 }
 

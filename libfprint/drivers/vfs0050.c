@@ -117,9 +117,10 @@ async_abort_callback (FpiUsbTransfer *transfer, FpDevice *device,
   int ep = transfer->endpoint;
 
   /* In normal case endpoint is empty */
-  if (g_error_matches (error, G_USB_DEVICE_ERROR, G_USB_DEVICE_ERROR_TIMED_OUT))
+  if (g_error_matches (error, G_USB_DEVICE_ERROR, G_USB_DEVICE_ERROR_TIMED_OUT) ||
+      (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0 && transfer->actual_length == 0))
     {
-      g_free (error);
+      g_clear_error (&error);
       fpi_ssm_next_state (transfer->ssm);
       return;
     }
@@ -155,6 +156,8 @@ async_abort (FpDevice *dev, FpiSsm *ssm, int ep)
     fpi_usb_transfer_fill_interrupt (transfer, ep, VFS_USB_BUFFER_SIZE);
   else
     fpi_usb_transfer_fill_bulk (transfer, ep, VFS_USB_BUFFER_SIZE);
+
+  transfer->ssm = ssm;
 
   fpi_usb_transfer_submit (transfer, VFS_USB_ABORT_TIMEOUT, NULL,
                            async_abort_callback, NULL);
@@ -240,6 +243,7 @@ prepare_image (FpDeviceVfs0050 *vdev)
 
   /* Building GSList */
   GSList *lines = NULL;
+
   for (int i = height - 1; i >= 0; --i)
     lines = g_slist_prepend (lines, vdev->lines_buffer + i);
 
@@ -464,8 +468,8 @@ receive_callback (FpiUsbTransfer *transfer, FpDevice *device,
   if (error)
     g_error_free (error);
 
-  /* Check if fingerprint data is over */
-  if (transfer->actual_length == 0)
+  /* Capture is done when there is no more data to transfer or device timed out */
+  if (transfer->actual_length <= 0)
     {
       fpi_ssm_next_state (transfer->ssm);
     }
@@ -473,7 +477,7 @@ receive_callback (FpiUsbTransfer *transfer, FpDevice *device,
     {
       self->bytes += transfer->actual_length;
 
-      /* We need more data */
+      /* Try reading more data */
       fpi_ssm_jump_to_state (transfer->ssm,
                              fpi_ssm_get_cur_state (transfer->ssm));
     }
@@ -595,8 +599,7 @@ activate_ssm (FpiSsm *ssm, FpDevice *dev)
         /* Receive chunk of data */
         transfer = fpi_usb_transfer_new (dev);
         fpi_usb_transfer_fill_bulk_full (transfer, 0x82,
-                                         (guint8 *)
-                                         (self->lines_buffer + self->bytes),
+                                         (guint8 *) self->lines_buffer + self->bytes,
                                          VFS_USB_BUFFER_SIZE, NULL);
         transfer->ssm = ssm;
         fpi_usb_transfer_submit (transfer, VFS_USB_TIMEOUT, NULL,
@@ -668,6 +671,7 @@ dev_activate (FpImageDevice *idev)
   self->ssm_active = 1;
 
   FpiSsm *ssm = fpi_ssm_new (FP_DEVICE (idev), activate_ssm, SSM_STATES);
+
   fpi_ssm_start (ssm, dev_activate_callback);
 }
 
@@ -711,6 +715,7 @@ dev_open (FpImageDevice *idev)
 
   /* Clearing previous device state */
   FpiSsm *ssm = fpi_ssm_new (FP_DEVICE (idev), activate_ssm, SSM_STATES);
+
   fpi_ssm_start (ssm, dev_open_callback);
 }
 

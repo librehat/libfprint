@@ -51,7 +51,7 @@ enum {
   PROP_IMAGE,
 
   /* The following is metadata that is stored by default for each print.
-   * Drivers may make use of these during enrollment (e.g. to additionaly store
+   * Drivers may make use of these during enrollment (e.g. to additionally store
    * the metadata on the device). */
   PROP_FINGER,
   PROP_USERNAME,
@@ -588,7 +588,7 @@ fp_print_equal (FpPrint *self, FpPrint *other)
     }
   else if (self->type == FPI_PRINT_NBIS)
     {
-      gint i;
+      guint i;
 
       if (self->prints->len != other->prints->len)
         return FALSE;
@@ -661,7 +661,7 @@ fp_print_serialize (FpPrint *print,
   if (print->type == FPI_PRINT_NBIS)
     {
       GVariantBuilder nested = G_VARIANT_BUILDER_INIT (G_VARIANT_TYPE ("(a(aiaiai))"));
-      gint i;
+      guint i;
 
       g_variant_builder_open (&nested, G_VARIANT_TYPE ("a(aiaiai)"));
       for (i = 0; i < print->prints->len; i++)
@@ -812,7 +812,7 @@ fp_print_deserialize (const guchar *data,
   if (type == FPI_PRINT_NBIS)
     {
       g_autoptr(GVariant) prints = g_variant_get_child_value (print_data, 0);
-      gint i;
+      guint i;
 
       result = g_object_new (FP_TYPE_PRINT,
                              "driver", driver,
@@ -822,7 +822,7 @@ fp_print_deserialize (const guchar *data,
       fpi_print_set_type (result, FPI_PRINT_NBIS);
       for (i = 0; i < g_variant_n_children (prints); i++)
         {
-          g_autofree struct xyt_struct *xyt = g_new0 (struct xyt_struct, 1);
+          g_autofree struct xyt_struct *xyt = NULL;
           const gint32 *xcol, *ycol, *thetacol;
           gsize xlen, ylen, thetalen;
           g_autoptr(GVariant) xyt_data = NULL;
@@ -848,6 +848,7 @@ fp_print_deserialize (const guchar *data,
           if (xlen > G_N_ELEMENTS (xyt->xcol))
             goto invalid_format;
 
+          xyt = g_new0 (struct xyt_struct, 1);
           xyt->nrows = xlen;
           memcpy (xyt->xcol, xcol, sizeof (xcol[0]) * xlen);
           memcpy (xyt->ycol, ycol, sizeof (xcol[0]) * xlen);

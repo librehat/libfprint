@@ -200,7 +200,7 @@ test_ssm_new_full (void)
 static void
 test_ssm_new_no_handler (void)
 {
-  g_autoptr(FpiSsm) ssm = NULL;
+  G_GNUC_UNUSED g_autoptr(FpiSsm) ssm = NULL;
 
   g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
                          "*BUG:*handler*");
@@ -211,7 +211,7 @@ test_ssm_new_no_handler (void)
 static void
 test_ssm_new_wrong_states (void)
 {
-  g_autoptr(FpiSsm) ssm = NULL;
+  G_GNUC_UNUSED g_autoptr(FpiSsm) ssm = NULL;
 
   g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_CRITICAL,
                          "*BUG:*nr_states*");
@@ -1172,6 +1172,7 @@ test_ssm_subssm_start (void)
   g_autoptr(FpiSsm) subssm =
     ssm_test_new_full (FPI_TEST_SSM_STATE_NUM, "FPI_TEST_SUB_SSM");
   FpiSsmTestData *data = fpi_ssm_get_data (ssm);
+
   g_autoptr(FpiSsmTestData) subdata =
     fpi_ssm_test_data_ref (fpi_ssm_get_data (subssm));
 
@@ -1262,6 +1263,7 @@ test_ssm_subssm_start_with_started (void)
   g_autoptr(FpiSsm) subssm =
     ssm_test_new_full (FPI_TEST_SSM_STATE_NUM, "FPI_TEST_SUB_SSM");
   FpiSsmTestData *data = fpi_ssm_get_data (ssm);
+
   g_autoptr(FpiSsmTestData) subdata =
     fpi_ssm_test_data_ref (fpi_ssm_get_data (subssm));
 
@@ -1305,6 +1307,7 @@ test_ssm_subssm_start_with_delayed (void)
   g_autoptr(FpiSsm) subssm =
     ssm_test_new_full (FPI_TEST_SSM_STATE_NUM, "FPI_TEST_SUB_SSM");
   FpiSsmTestData *data = fpi_ssm_get_data (ssm);
+
   g_autoptr(FpiSsmTestData) subdata =
     fpi_ssm_test_data_ref (fpi_ssm_get_data (subssm));
   gpointer timeout_tracker = GUINT_TO_POINTER (TRUE);

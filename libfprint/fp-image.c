@@ -184,10 +184,8 @@ fp_image_detect_minutiae_cb (GObject      *source_object,
   GTask *task = G_TASK (res);
   FpImage *image;
   DetectMinutiaeData *data = g_task_get_task_data (task);
-  GCancellable *cancellable;
 
-  cancellable = g_task_get_cancellable (task);
-  if (!cancellable || !g_cancellable_is_cancelled (cancellable))
+  if (!g_task_had_error (task))
     {
       gint i;
       image = FP_IMAGE (source_object);
@@ -283,6 +281,7 @@ fp_image_detect_minutiae_thread_func (GTask        *task,
   gint map_w, map_h;
   gint bw, bh, bd;
   gint r;
+  g_autofree LFSPARMS *lfsparms;
 
   /* Normalize the image first */
   if (data->flags & FPI_IMAGE_H_FLIPPED)
@@ -296,12 +295,15 @@ fp_image_detect_minutiae_thread_func (GTask        *task,
 
   data->flags &= ~(FPI_IMAGE_H_FLIPPED | FPI_IMAGE_V_FLIPPED | FPI_IMAGE_COLORS_INVERTED);
 
+  lfsparms = g_memdup (&g_lfsparms_V2, sizeof (LFSPARMS));
+  lfsparms->remove_perimeter_pts = data->flags & FPI_IMAGE_PARTIAL ? TRUE : FALSE;
+
   timer = g_timer_new ();
   r = get_minutiae (&minutiae, &quality_map, &direction_map,
                     &low_contrast_map, &low_flow_map, &high_curve_map,
                     &map_w, &map_h, &bdata, &bw, &bh, &bd,
                     data->image, data->width, data->height, 8,
-                    data->ppmm, &g_lfsparms_V2);
+                    data->ppmm, lfsparms);
   g_timer_stop (timer);
   fp_dbg ("Minutiae scan completed in %f secs", g_timer_elapsed (timer, NULL));
 
@@ -312,6 +314,14 @@ fp_image_detect_minutiae_thread_func (GTask        *task,
     {
       fp_err ("get minutiae failed, code %d", r);
       g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED, "Minutiae scan failed with code %d", r);
+      g_object_unref (task);
+      return;
+    }
+
+  if (!data->minutiae || data->minutiae->num == 0)
+    {
+      g_task_return_new_error (task, G_IO_ERROR, G_IO_ERROR_FAILED,
+                               "No minutiae found");
       g_object_unref (task);
       return;
     }

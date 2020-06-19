@@ -35,7 +35,6 @@
 #define TIMEOUT 5000
 
 #define MSG_READ_BUF_SIZE 0x40
-#define MAX_DATA_IN_READ_BUF (MSG_READ_BUF_SIZE - 9)
 
 struct _FpiDeviceUpekts
 {
@@ -236,11 +235,17 @@ __handle_incoming_msg (FpDevice             *device,
 {
   GError *error = NULL;
   guint8 *buf = udata->buffer;
-  guint16 len = ((buf[5] & 0xf) << 8) | buf[6];
-  guint16 computed_crc = udf_crc (buf + 4, len + 3);
-  guint16 msg_crc = (buf[len + 8] << 8) | buf[len + 7];
-  unsigned char *retdata = NULL;
+  guint16 len;
+  guint16 computed_crc;
+  guint16 msg_crc;
   unsigned char code_a, code_b;
+
+  g_assert (udata->buflen >= 6);
+  len = ((buf[5] & 0xf) << 8) | buf[6];
+
+  g_assert (udata->buflen >= len + 9);
+  computed_crc = udf_crc (buf + 4, len + 3);
+  msg_crc = (buf[len + 8] << 8) | buf[len + 7];
 
   if (computed_crc != msg_crc)
     {
@@ -267,12 +272,7 @@ __handle_incoming_msg (FpDevice             *device,
           return;
         }
 
-      if (len > 0)
-        {
-          retdata = g_malloc (len);
-          memcpy (retdata, buf + 7, len);
-        }
-      udata->callback (device, READ_MSG_CMD, code_a, 0, retdata, len,
+      udata->callback (device, READ_MSG_CMD, code_a, 0, buf + 7, len,
                        udata->user_data, NULL);
       goto done;
     }
@@ -309,14 +309,8 @@ __handle_incoming_msg (FpDevice             *device,
       innerlen = innerlen - 3;
       _subcmd = innerbuf[5];
       fp_dbg ("device responds to subcmd %x with %d bytes", _subcmd, innerlen);
-      if (innerlen > 0)
-        {
-          retdata = g_malloc (innerlen);
-          memcpy (retdata, innerbuf + 6, innerlen);
-        }
       udata->callback (device, READ_MSG_RESPONSE, code_b, _subcmd,
-                       retdata, innerlen, udata->user_data, NULL);
-      g_free (retdata);
+                       innerbuf + 6, innerlen, udata->user_data, NULL);
       goto done;
     }
   else
@@ -358,7 +352,8 @@ read_msg_cb (FpiUsbTransfer *transfer, FpDevice *device,
              gpointer user_data, GError *error)
 {
   struct read_msg_data *udata = user_data;
-  guint16 len;
+  guint16 payload_len;
+  gsize packet_len;
 
   if (error)
     {
@@ -383,14 +378,15 @@ read_msg_cb (FpiUsbTransfer *transfer, FpDevice *device,
       goto err;
     }
 
-  len = ((udata->buffer[5] & 0xf) << 8) | udata->buffer[6];
+  payload_len = ((udata->buffer[5] & 0xf) << 8) | udata->buffer[6];
+  packet_len = payload_len + 9;
   if (transfer->actual_length != MSG_READ_BUF_SIZE &&
-      (len + 9) > transfer->actual_length)
+      packet_len > transfer->actual_length)
     {
       /* Check that the length claimed inside the message is in line with
        * the amount of data that was transferred over USB. */
       fp_err ("msg didn't include enough data, expected=%d recv=%d",
-              len + 9, (gint) transfer->actual_length);
+              (gint) packet_len, (gint) transfer->actual_length);
       error = fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
                                         "Packet from device didn't include data");
       goto err;
@@ -399,14 +395,14 @@ read_msg_cb (FpiUsbTransfer *transfer, FpDevice *device,
   /* We use a 64 byte buffer for reading messages. However, sometimes
    * messages are longer, in which case we have to do another USB bulk read
    * to read the remainder. This is handled below. */
-  if (len > MAX_DATA_IN_READ_BUF)
+  if (packet_len > MSG_READ_BUF_SIZE)
     {
-      int needed = len - MAX_DATA_IN_READ_BUF;
+      int needed = packet_len - MSG_READ_BUF_SIZE;
       FpiUsbTransfer *etransfer = fpi_usb_transfer_new (device);
 
       fp_dbg ("didn't fit in buffer, need to extend by %d bytes", needed);
-      udata->buffer = g_realloc ((gpointer) udata->buffer, len);
-      udata->buflen = len;
+      udata->buffer = g_realloc ((gpointer) udata->buffer, packet_len);
+      udata->buflen = packet_len;
 
       fpi_usb_transfer_fill_bulk_full (etransfer, EP_IN,
                                        udata->buffer + MSG_READ_BUF_SIZE,
@@ -700,7 +696,7 @@ initsm_run_state (FpiSsm *ssm, FpDevice *dev)
       break;
 
     case SEND_RESP03:;
-      transfer = alloc_send_cmd28_transfer (dev, ++upekdev->seq, init_resp03, sizeof (init_resp03));
+      transfer = alloc_send_cmdresponse_transfer (dev, ++upekdev->seq, init_resp03, sizeof (init_resp03));
       transfer->ssm = ssm;
       transfer->short_is_error = TRUE;
       fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
@@ -857,20 +853,13 @@ dev_init (FpDevice *dev)
 }
 
 static void
-deinitsm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
-{
-  g_usb_device_release_interface (fpi_device_get_usb_device (dev), 0, 0, NULL);
-
-  fpi_device_close_complete (dev, error);
-}
-
-static void
 dev_exit (FpDevice *dev)
 {
-  FpiSsm *ssm;
+  GError *error = NULL;
 
-  ssm = fpi_ssm_new (dev, deinitsm_state_handler, DEINITSM_NUM_STATES);
-  fpi_ssm_start (ssm, deinitsm_done);
+  g_usb_device_release_interface (fpi_device_get_usb_device (dev), 0, 0, &error);
+
+  fpi_device_close_complete (dev, error);
 }
 
 static const unsigned char enroll_init[] = {
@@ -983,7 +972,9 @@ enroll_stop_deinit_cb (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     fp_warn ("Error deinitializing: %s", error->message);
 
-  fpi_device_enroll_complete (dev, data->print, data->error);
+  fpi_device_enroll_complete (dev,
+                              g_steal_pointer (&data->print),
+                              g_steal_pointer (&data->error));
 }
 
 static void
@@ -992,7 +983,7 @@ do_enroll_stop (FpDevice *dev, FpPrint *print, GError *error)
   EnrollStopData *data = g_new0 (EnrollStopData, 1);
   FpiSsm *ssm = deinitsm_new (dev, data);
 
-  data->print = g_object_ref (print);
+  data->print = print;
   data->error = error;
 
   fpi_ssm_start (ssm, enroll_stop_deinit_cb);
@@ -1119,7 +1110,6 @@ e_handle_resp02 (FpDevice *dev, unsigned char *data,
   else
     {
       GVariant *fp_data;
-      print = fp_print_new (dev);
 
       fpi_device_get_enroll_data (dev, &print);
 
@@ -1128,6 +1118,7 @@ e_handle_resp02 (FpDevice *dev, unsigned char *data,
                                            data_len - sizeof (scan_comp),
                                            1);
 
+      fpi_print_set_type (print, FPI_PRINT_RAW);
       g_object_set (print, "fpi-data", fp_data, NULL);
       g_object_ref (print);
     }
@@ -1246,11 +1237,11 @@ verify_stop_deinit_cb (FpiSsm *ssm, FpDevice *dev, GError *error)
     fp_warn ("Error deinitializing: %s", error->message);
 
   if (data->error)
-    fpi_device_verify_complete (dev, data->error);
+    fpi_device_verify_complete (dev, g_steal_pointer (&data->error));
   else
     fpi_device_verify_complete (dev, g_steal_pointer (&error));
 
-  g_error_free (error);
+  g_clear_error (&error);
 }
 
 static void
@@ -1260,7 +1251,7 @@ do_verify_stop (FpDevice *dev, FpiMatchResult res, GError *error)
   FpiSsm *ssm = deinitsm_new (dev, data);
 
   /* Report the error immediately if possible, otherwise delay it. */
-  if (!error && error->domain != FP_DEVICE_RETRY)
+  if (error && error->domain == FP_DEVICE_RETRY)
     fpi_device_verify_report (dev, res, NULL, error);
   else
     data->error = error;
@@ -1302,7 +1293,7 @@ verify_start_sm_run_state (FpiSsm *ssm, FpDevice *dev)
 
     case VERIFY_INIT:
       fpi_device_get_verify_data (dev, &print);
-      g_object_get (dev, "fpi-data", &fp_data, NULL);
+      g_object_get (print, "fpi-data", &fp_data, NULL);
 
       data = g_variant_get_fixed_array (fp_data, &data_len, 1);
 

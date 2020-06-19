@@ -141,6 +141,11 @@ Package: libfprint-2-tod-dev
 Section: libdevel
 Architecture: any
 Depends: libfprint-2-tod1 (= ${binary:Version}),
+         libfprint-2-dev (= ${binary:Version}),
+         libglib2.0-dev (>= 2.56),
+         libgusb-dev (>= 0.2.0),
+         libpixman-1-dev,
+         libnss3-dev,
          ${misc:Depends}
 Description: async fingerprint library of fprint project, drivers development headers
  The fprint project aims to support for consumer fingerprint reader devices.

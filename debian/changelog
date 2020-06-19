@@ -1,3 +1,20 @@
+libfprint (1:1.90.2+tod1-0ubuntu1) UNRELEASED; urgency=medium
+
+  * New upstream release
+    - Fixed crash in VFS0050 (LP: #1876502)
+    - Enrollment fails with UPEK reader (LP: #1881380)
+    - Lots of various drivers fixes
+    - As per a patch for nbis required for some sensors that was accidentally
+      dropped in an earlier release. Users of sensors/drivers aes1610, aes2501,
+      aes2550, aes1660, aes2660, elan, upektc_img) need to re-enroll
+  * d/p/git_reading_pointer.patch:
+    - Dopped (applied upstream)
+  * debian/control: Add missing libfprint-2-tod-dev dependencies (LP: #1884267)
+  * debian/rules: Be strictier about symbol changes
+  * libfprint-2-tod1.symbols: Add new TOD symbols
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 19 Jun 2020 17:36:51 +0200
+
 libfprint (1:1.90.1+tod1-0ubuntu4) focal; urgency=medium
 
   * Rebuild with the new libgusb

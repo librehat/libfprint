@@ -156,6 +156,8 @@ libfprint-2-tod.so.1 libfprint-2-tod1 #MINVER#
  fpi_print_add_from_image@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_add_print@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_bz3_match@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_print_fill_from_user_id@LIBFPRINT_TOD_1.0.0 1:1.90.2+tod1
+ fpi_print_generate_user_id@LIBFPRINT_TOD_1.0.0 1:1.90.2+tod1
  fpi_print_set_device_stored@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_set_type@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_ssm_cancel_delayed_state_change@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1

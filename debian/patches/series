@@ -1,5 +1,2 @@
-# Upstream backports
-git_reading_pointer.patch
-
 # Debian specifics
 udev-rules-creation-add-Debian-specifics.patch

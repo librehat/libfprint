@@ -1,4 +1,4 @@
-libfprint (1:1.90.2+tod1-0ubuntu1) UNRELEASED; urgency=medium
+libfprint (1:1.90.2+tod1-0ubuntu1) groovy; urgency=medium
 
   * New upstream release
     - Fixed crash in VFS0050 (LP: #1876502)
@@ -13,7 +13,7 @@ libfprint (1:1.90.2+tod1-0ubuntu1) UNRELEASED; urgency=medium
   * debian/rules: Be strictier about symbol changes
   * libfprint-2-tod1.symbols: Add new TOD symbols
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 19 Jun 2020 17:36:51 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 19 Jun 2020 17:38:55 +0200
 
 libfprint (1:1.90.1+tod1-0ubuntu4) focal; urgency=medium
 

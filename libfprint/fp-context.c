@@ -99,22 +99,21 @@ async_device_init_done_cb (GObject *source_object, GAsyncResult *res, gpointer u
   FpContext *context;
   FpContextPrivate *priv;
 
-  device = (FpDevice *) g_async_initable_new_finish (G_ASYNC_INITABLE (source_object), res, &error);
-  if (!device)
-    {
-      if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
-        return;
-
-      context = FP_CONTEXT (user_data);
-      priv = fp_context_get_instance_private (context);
-      priv->pending_devices--;
-      g_message ("Ignoring device due to initialization error: %s", error->message);
-      return;
-    }
+  device = FP_DEVICE (g_async_initable_new_finish (G_ASYNC_INITABLE (source_object),
+                                                   res, &error));
+  if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+    return;
 
   context = FP_CONTEXT (user_data);
   priv = fp_context_get_instance_private (context);
   priv->pending_devices--;
+
+  if (error)
+    {
+      g_message ("Ignoring device due to initialization error: %s", error->message);
+      return;
+    }
+
   g_ptr_array_add (priv->devices, device);
   g_signal_emit (context, signals[DEVICE_ADDED_SIGNAL], 0, device);
 }
@@ -164,7 +163,7 @@ usb_device_added_cb (FpContext *self, GUsbDevice *device, GUsbContext *usb_ctx)
 
   if (found_driver == G_TYPE_NONE)
     {
-      g_debug ("No driver found for USB device %04X:%04X", pid, vid);
+      g_debug ("No driver found for USB device %04X:%04X", vid, pid);
       return;
     }
 

@@ -204,6 +204,7 @@ deps = [
     enums_dep,
     gio_dep,
     glib_dep,
+    gobject_dep,
     gusb_dep,
     imaging_dep,
     mathlib_dep,
@@ -263,7 +264,7 @@ libfprint = library(versioned_libname.split('lib')[1],
     version: libversion,
     link_args : vflag,
     link_depends : mapfile,
-    link_with: [libfprint_private, libfprint_drivers],
+    link_with: [libfprint_drivers, libfprint_private],
     dependencies: deps,
     install: true)
 
@@ -273,6 +274,7 @@ libfprint_dep = declare_dependency(link_with: libfprint,
         enums_dep,
         gio_dep,
         glib_dep,
+        gobject_dep,
         gusb_dep,
     ])
 
@@ -329,6 +331,7 @@ if get_option('introspection')
         link_with : libfprint,
         dependencies : [
             gio_dep,
+            gobject_dep,
             gusb_dep,
         ],
         includes : [

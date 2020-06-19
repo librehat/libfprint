@@ -24,12 +24,11 @@
 #include "fp-image-device.h"
 
 /**
- * SECTION: fpi-image
- * @title: Internal FpImage
- * @short_description: Internal image handling routines
+ * SECTION: fpi-image-device
+ * @title: Internal FpImageDevice
+ * @short_description: Internal image device functions
  *
- * Internal image handling routines. Also see the public <ulink
- * url="libfprint-FpImage.html">FpImage routines</ulink>.
+ * Internal image device functions. See #FpImageDevice for public routines.
  */
 
 /* Manually redefine what G_DEFINE_* macro does */
@@ -171,7 +170,16 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       print = fp_print_new (device);
       fpi_print_set_type (print, FPI_PRINT_NBIS);
       if (!fpi_print_add_from_image (print, image, &error))
-        g_clear_object (&print);
+        {
+          g_clear_object (&print);
+
+          if (error->domain != FP_DEVICE_RETRY)
+            {
+              fpi_device_action_error (device, error);
+              fpi_image_device_deactivate (self);
+              return;
+            }
+        }
     }
 
   if (action == FPI_DEVICE_ACTION_ENROLL)

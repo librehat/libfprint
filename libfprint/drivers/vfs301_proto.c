@@ -177,6 +177,7 @@ translate_str (const char **srcL, gssize *len)
       src_len += tmp;
     }
 
+  g_assert (src_len >= 2);
   *len = src_len / 2;
   res = g_malloc0 (*len);
   dst = res;
@@ -437,7 +438,7 @@ img_process_data (int first_block, FpDeviceVfs301 *dev, const guint8 *buf, int l
     usb_send (dev, data, len, NULL); \
   }
 
-#define RAW_DATA(x) x, sizeof (x)
+#define RAW_DATA(x) g_memdup (x, sizeof (x)), sizeof (x)
 
 #define IS_VFS301_FP_SEQ_START(b) ((b[0] == 0x01) && (b[1] == 0xfe))
 

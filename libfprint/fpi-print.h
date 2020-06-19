@@ -20,7 +20,7 @@ typedef enum {
 
 /**
  * FpiMatchResult:
- * @FPI_MATCH_ERROR: An error occured during matching
+ * @FPI_MATCH_ERROR: An error occurred during matching
  * @FPI_MATCH_FAIL: The prints did not match
  * @FPI_MATCH_SUCCESS: The prints matched
  */
@@ -46,5 +46,10 @@ FpiMatchResult fpi_print_bz3_match (FpPrint * template,
                                     FpPrint * print,
                                     gint bz3_threshold,
                                     GError **error);
+
+/* Helpers to encode metadata into user ID strings. */
+gchar *  fpi_print_generate_user_id (FpPrint *print);
+gboolean fpi_print_fill_from_user_id (FpPrint    *print,
+                                      const char *user_id);
 
 G_END_DECLS

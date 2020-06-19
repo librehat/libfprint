@@ -18,6 +18,7 @@
  */
 
 #include "config.h"
+#include "libfprint/fp-device.h"
 
 #include <gtk/gtk.h>
 #include <libfprint/fprint.h>

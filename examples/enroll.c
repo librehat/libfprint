@@ -19,10 +19,11 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fpi-enums.h"
 #define FP_COMPONENT "example-enroll"
 
 #include <stdio.h>
-#include <libfprint/fprint.h>
+#include <libfprint/fprint.h> 
 #include <glib-unix.h>
 
 #include "storage.h"
@@ -112,7 +113,7 @@ on_enroll_progress (FpDevice *device,
       return;
     }
 
-  if (print && fp_print_get_image (print) &&
+  if (fp_device_supports_capture (device) &&
       print_image_save (print, "enrolled.pgm"))
     printf ("Wrote scanned image to enrolled.pgm\n");
 

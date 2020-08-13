@@ -110,6 +110,7 @@ default_drivers = [
     'upektc',
     'upeksonly',
     'upekts',
+    'pa_primex',
 ]
 
 all_drivers = default_drivers + virtual_drivers

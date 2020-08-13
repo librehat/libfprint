@@ -90,6 +90,9 @@ foreach driver: drivers
     if driver == 'upektc'
         drivers_sources += [ 'drivers/upektc.c' ]
     endif
+    if driver == 'pa_primex'
+        drivers_sources += [ 'drivers/pa_primex.c' ]
+    endif
     if driver == 'upeksonly'
         drivers_sources += [ 'drivers/upeksonly.c' ]
     endif

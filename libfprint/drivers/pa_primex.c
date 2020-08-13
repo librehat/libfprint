@@ -44,11 +44,6 @@ initpa_run_state(FpiSsm *ssm, FpDevice *dev)
     fpi_ssm_next_state(ssm);
 }
 
-static FpiSsm *
-initpa_new(FpDevice *dev)
-{
-    return fpi_ssm_new(dev, initpa_run_state, DONE);
-}
 
 static void
 initpa_done(FpiSsm *ssm, FpDevice *dev, GError *error)
@@ -108,7 +103,7 @@ enroll_iterate(FpDevice *dev)
 static void
 enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
-    char *p = "finger1\n";
+    const char *p = "finger1\n";
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     g_print("hello PA: enroll_started %d\n", fpi_ssm_get_cur_state(ssm));
     padev->enroll_passed = TRUE;
@@ -164,10 +159,55 @@ enroll(FpDevice *dev)
     fpi_ssm_start(ssm, enroll_started);
 }
 
+enum verify_start_pa_states
+{   
+    VERIFY_INIT = 0,
+    VERIFY_UPDATE,
+    VERIFY_FINAL
+};
+
+static void
+verify_iterate(FpDevice *dev)
+{
+    g_print("hello PA: verify_iterate\n");
+}
+
+static void
+verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
+{
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    g_print("hello PA: verify_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    switch (fpi_ssm_get_cur_state(ssm))
+    {
+    case VERIFY_INIT:
+        g_print("hello PA: VERIFY_INIT\n");
+        fpi_ssm_next_state(ssm);
+        break;
+    case VERIFY_UPDATE:
+        g_print("hello PA: VERIFY_UPDATE\n");
+        verify_iterate(dev);
+        fpi_ssm_next_state(ssm);
+        break;
+    default:
+        g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        break;
+    }
+}
+
+static void
+verify_started(FpiSsm *ssm, FpDevice *dev, GError *error)
+{
+    GError *err = NULL;
+    fpi_device_verify_report (dev, FPI_MATCH_SUCCESS, NULL, NULL);
+    fpi_device_verify_complete (dev, err);
+}
+
 static void
 verify(FpDevice *dev)
 {
     g_print("hello PA: verify\n");
+    FpiSsm *ssm = fpi_ssm_new(dev, verify_start_pa_run_state, VERIFY_FINAL);
+    fpi_ssm_start(ssm, verify_started);
 }
 
 static void

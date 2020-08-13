@@ -36,14 +36,112 @@ typedef struct
     GError *error;
 } EnrollStopData;
 
+#define PA_HEADER_LEN 5
+#define PA_INNER_HEADER_LEN 7
+#define PA_APDU_CLA 0xfe
+#define PA_CMD_ENROLL 0x71
+#define PA_CMD_DELETE 0x73
+#define PA_CMD_ABORT 0x74
+#define PA_CMD_FPSTATE 0x75
+#define PA_CMD_LIST 0x76
+#define PA_CMD_VERIFY 0x80
+#define PA_CMD_VID 0x81
+
+#define TIMEOUT 5000
+#define PA_IN (2 | FPI_USB_ENDPOINT_IN)
+#define PA_OUT (1 | FPI_USB_ENDPOINT_OUT)
+
+const unsigned char pa_header[] = {0x50, 0x58, 0x41, 0x54, 0xc0};
+const char *str_enroll = "u2f enroll fp";
+const char *str_delete = "u2f delete fp";
+const char *str_abort = "u2f abort fp";
+const char *str_verify = "wbf verify fp";
+
+static void
+read_res_back(FpiUsbTransfer *transfer, FpDevice *device,
+              gpointer user_data, GError *error);
+
+static void
+handle_response(FpDevice *device, unsigned char *udata);
+
+static void
+read_cb(FpiUsbTransfer *transfer, FpDevice *device,
+        gpointer user_data, GError *error);
+
+static void
+alloc_send_cmd_transfer(FpDevice *dev,
+                        unsigned char ins,
+                        unsigned char p1,
+                        unsigned char p2,
+                        const unsigned char *data,
+                        guint16 len)
+{
+    g_print("hello PA: alloc_send_cmd_transfer len=%d \n", len);
+    g_print("hello PA: alloc_send_cmd_transfer %s \n", data);
+    FpiUsbTransfer *transfer = fpi_usb_transfer_new(dev);
+    fpi_usb_transfer_fill_bulk(transfer, PA_OUT, len + PA_HEADER_LEN + PA_INNER_HEADER_LEN);
+    memcpy(transfer->buffer, pa_header, PA_HEADER_LEN);
+    transfer->buffer[5] = (len + PA_INNER_HEADER_LEN) >> 8;
+    transfer->buffer[6] = (len + PA_INNER_HEADER_LEN) & 0xff;
+    transfer->buffer[7] = PA_APDU_CLA;
+    transfer->buffer[8] = ins;
+    transfer->buffer[9] = p1;
+    transfer->buffer[10] = p2;
+    transfer->buffer[10] = 0;
+    transfer->buffer[11] = len >> 8;
+    transfer->buffer[12] = len & 0xff;
+    g_print("hello PA: alloc_send_cmd_transfer header one \n");
+    if (len != 0)
+        memcpy(transfer->buffer + PA_HEADER_LEN + PA_INNER_HEADER_LEN, data, len);
+    g_print("hello PA: alloc_send_cmd_transfer leave\n");
+    fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, read_res_back, NULL);
+    g_print("hello PA: fpi_usb_transfer_submit\n");
+}
+
+static void
+read_res_back(FpiUsbTransfer *transfer, FpDevice *device,
+              gpointer user_data, GError *error)
+{
+    unsigned char *udata = user_data;
+    udata = g_realloc(udata, 128);
+    int needed = 7 + 2;
+    g_print("hello PA: read_res_back\n");
+
+    FpiUsbTransfer *etransfer = fpi_usb_transfer_new(device);
+
+    fpi_usb_transfer_fill_bulk_full(etransfer, PA_IN, udata, needed, NULL);
+    fpi_usb_transfer_submit(etransfer, TIMEOUT, NULL, read_cb, udata);
+}
+
+static void
+read_cb(FpiUsbTransfer *transfer, FpDevice *device,
+        gpointer user_data, GError *error)
+{
+    unsigned char *udata = user_data;
+    g_print("hello PA: read_cb len = %d\n", transfer->actual_length);
+    handle_response(device, udata);
+}
+
+static void
+handle_response(FpDevice *device, unsigned char *udata)
+{
+    g_print("hello PA: handle_response %d %d %d \n", udata[0], udata[1], udata[2]);
+}
+
+static void pa_abort(FpDevice *dev)
+{
+    g_print("hello PA: pa_abort \n");
+    alloc_send_cmd_transfer(dev, PA_CMD_ABORT, 0, 0, str_abort, strlen(str_abort));
+}
+
 static void
 initpa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
     g_print("hello PA: initsm_run_state\n");
+    pa_abort(dev);
     g_print("hello PA: initsm_run_state %d\n", fpi_ssm_get_cur_state(ssm));
     fpi_ssm_next_state(ssm);
 }
-
 
 static void
 initpa_done(FpiSsm *ssm, FpDevice *dev, GError *error)
@@ -149,7 +247,7 @@ enroll(FpDevice *dev)
 {
     g_print("hello PA: enroll\n");
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
-
+    sleep(2);
     /* do_init state machine first */
     FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
                               ENROLL_FINAL);
@@ -160,7 +258,7 @@ enroll(FpDevice *dev)
 }
 
 enum verify_start_pa_states
-{   
+{
     VERIFY_INIT = 0,
     VERIFY_UPDATE,
     VERIFY_FINAL
@@ -198,8 +296,8 @@ static void
 verify_started(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
     GError *err = NULL;
-    fpi_device_verify_report (dev, FPI_MATCH_SUCCESS, NULL, NULL);
-    fpi_device_verify_complete (dev, err);
+    fpi_device_verify_report(dev, FPI_MATCH_SUCCESS, NULL, NULL);
+    fpi_device_verify_complete(dev, err);
 }
 
 static void

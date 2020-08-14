@@ -113,12 +113,11 @@ struct prime_data
 
 static void
 alloc_get_cmd_transfer(FpDevice *device,
-                       FpiSsm *ssm,
-                       handle_get_fn callback);
+                       handle_get_fn callback,
+                       void *user_data);
 
 static void
-handle_response(FpiUsbTransfer *transfer, FpDevice *device,
-                gpointer user_data, GError *error);
+handle_response(FpDevice *device, FpiUsbTransfer *transfer,struct prime_data *udata);
 
 static void
 read_cb(FpiUsbTransfer *transfer, FpDevice *device,
@@ -134,7 +133,10 @@ enroll_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
                       gpointer user_data, GError *error);
 
 static void
-enroll_iterate(FpDevice *dev, FpiSsm *ssm);
+enroll_iterate(FpDevice *dev);
+
+static void
+do_enroll_done (FpDevice *dev);
 
 static void
 alloc_send_cmd_transfer(FpDevice *dev,
@@ -145,7 +147,7 @@ alloc_send_cmd_transfer(FpDevice *dev,
                         const unsigned char *data,
                         guint16 len)
 {
-    g_print("hello PA: alloc_send_cmd_transfer len=%d \n", len);
+    //g_print("hello PA: alloc_send_cmd_transfer len=%d \n", len);
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(dev);
     int real_len = 0;
     if (ins == PA_CMD_FPSTATE)
@@ -165,11 +167,12 @@ alloc_send_cmd_transfer(FpDevice *dev,
     transfer->buffer[11] = 0;
     transfer->buffer[12] = len >> 8;
     transfer->buffer[13] = len & 0xff;
-    if(ins == PA_CMD_FPSTATE)
+    if (ins == PA_CMD_FPSTATE)
         transfer->buffer[13] = 1;
     if (len != 0 && data != NULL)
         memcpy(transfer->buffer + PA_HEADER_LEN + PA_LEN_LEN + PA_INNER_HEADER_LEN, data, len);
-    transfer->ssm = ssm;
+    if(ssm!=NULL)
+        transfer->ssm = ssm;
     if (ins == PA_CMD_FPSTATE)
         fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
     else
@@ -178,17 +181,17 @@ alloc_send_cmd_transfer(FpDevice *dev,
 
 static void
 alloc_get_cmd_transfer(FpDevice *device,
-                       FpiSsm *ssm,
-                       handle_get_fn callback)
+                       handle_get_fn callback,
+                       void *user_data)
 {
-    g_print("hello PA: alloc_get_cmd_transfer\n");
+    //g_print("hello PA: alloc_get_cmd_transfer\n");
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(device);
     struct prime_data *udata = g_new0(struct prime_data, 1);
 
     udata->buflen = 0;
     udata->buffer = NULL;
     udata->callback = callback;
-    udata->user_data = ssm;
+    udata->user_data = user_data;
 
     udata->buffer = g_realloc(udata->buffer, PA_MAX_GET_LEN);
     udata->buflen = PA_MAX_GET_LEN;
@@ -200,31 +203,22 @@ static void
 read_cb(FpiUsbTransfer *transfer, FpDevice *device,
         gpointer user_data, GError *error)
 {
-    g_print("hello PA: read_cb len = %ld\n", transfer->actual_length);
+    struct prime_data *udata = user_data;
+    //g_print("hello PA: read_cb len = %ld\n", transfer->actual_length);
     if (transfer->actual_length < PA_HEADER_LEN + PA_LEN_LEN + PA_SW_LEN)
     {
         g_print("hello PA: error %s\n", error->message);
         return;
     }
 
-    handle_response(transfer, device, user_data, NULL);
+    handle_response(device, transfer, udata);
 
     return;
 }
 
 static void
-handle_response(FpiUsbTransfer *transfer, FpDevice *device,
-                gpointer user_data, GError *error)
+handle_response(FpDevice *device, FpiUsbTransfer *transfer,struct prime_data *udata)
 {
-    struct prime_data *udata = user_data;
-
-    if (error)
-    {
-        g_print("hello PA:Error in handle_response %s\n", error->message);
-        g_free(udata->buffer);
-        g_free(udata);
-        return;
-    }
     guint8 *buf = udata->buffer;
     guint16 len = transfer->actual_length;
     udata->callback(device, buf, len, udata->user_data, NULL);
@@ -233,7 +227,7 @@ handle_response(FpiUsbTransfer *transfer, FpDevice *device,
 static int get_sw(unsigned char *data, size_t data_len)
 {
     int len = data[6];
-    g_print("PA: SW %x %x\n", data[7 + len - 2], data[8 + len - 2]);
+    //g_print("PA: SW %x %x\n", data[7 + len - 2], data[8 + len - 2]);
     if (data[7 + len - 2] == 0x90 && data[8 + len - 2] == 0)
         return PA_OK;
     if (data[7 + len - 2] == 0x6f && data[8 + len - 2] == 3)
@@ -285,7 +279,7 @@ initpa_run_state(FpiSsm *ssm, FpDevice *dev)
         break;
     case ABORT_GET:
         g_print("hello PA: ABORT_GET\n");
-        alloc_get_cmd_transfer(dev, ssm, handle_get_abort);
+        alloc_get_cmd_transfer(dev, handle_get_abort,ssm);
         break;
     default:
         g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
@@ -335,8 +329,7 @@ enum enroll_start_pa_states
 {
     ENROLL_CMD_SEND = 0,
     ENROLL_CMD_GET,
-    ENROLL_UPDATE,
-    ENROLL_FINAL
+    ENROLL_UPDATE
 };
 
 static void handle_enroll_iterate_cb(FpDevice *dev,
@@ -345,59 +338,64 @@ static void handle_enroll_iterate_cb(FpDevice *dev,
                                      void *user_data,
                                      GError *error)
 {
-    FpiSsm *ssm = user_data;
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     unsigned char code = 0;
-    g_print("hello PA: handle_enroll_iterate_cb\n");
+    g_print("hello PA: handle_enroll_iterate_cb %d \n", padev->enroll_stage);
     int result = get_sw(data, data_len);
     if (result == PA_OK)
     {
         get_data(data, data_len, &code);
         g_print("hello PA: enroll_state %d\n", code);
+        // for enroll test, not complete the enroll since delete not done
+        // if(padev->enroll_stage==10)
+        // {
+        //     g_print("hello PA: 10 %d\n", code);
+        //     do_enroll_done(dev);
+        //     return;
+        // }
         if (code == PA_FPM_ENROLL_GOOD)
         {
+            g_print("hello PA: PA_FPM_ENROLL_GOOD %d\n", padev->enroll_stage);
             padev->enroll_stage += 1;
             fpi_device_enroll_progress(dev, padev->enroll_stage, NULL, NULL);
+            
         }
         if (code == PA_FPM_ENROLL_OK)
         {
             padev->enroll_stage = 16;
-            fpi_ssm_next_state(ssm);
+            g_print("hello PA: PA_FPM_ENROLL_OK\n");
             fpi_device_enroll_progress(dev, padev->enroll_stage, NULL, NULL);
+            g_print("hello PA: PA_FPM_ENROLL_OK %d\n", padev->enroll_stage);
+            do_enroll_done(dev);
         }
     }
     else
     {
         //TODO: error handle
     }
-    if (padev->enroll_stage < 16)
-        enroll_iterate(dev, ssm);
+    enroll_iterate(dev);
 }
 
 static void
 enroll_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
                       gpointer user_data, GError *error)
 {
-    FpiSsm *ssm = user_data;
     g_print("hello PA: enroll_iterate_cmd_cb\n");
-    alloc_get_cmd_transfer(device, ssm, handle_enroll_iterate_cb);
+    alloc_get_cmd_transfer(device, handle_enroll_iterate_cb,NULL);
 }
 
 static void
-enroll_iterate(FpDevice *dev, FpiSsm *ssm)
+enroll_iterate(FpDevice *dev)
 {
-    alloc_send_cmd_transfer(dev, ssm, PA_CMD_FPSTATE, 0, 0, NULL, 1);
-    //g_print("hello PA: enroll_iterate\n");
+    g_print("hello PA: enroll_iterate\n");
+    alloc_send_cmd_transfer(dev, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
 }
 
+
 static void
-enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
+do_enroll_done (FpDevice *dev)
 {
     const char *p = "finger1\n";
-    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
-    g_print("hello PA: enroll_started %d\n", fpi_ssm_get_cur_state(ssm));
-    padev->enroll_passed = TRUE;
-
     FpPrint *print = NULL;
     GError *err = NULL;
     GVariant *fp_data;
@@ -410,6 +408,17 @@ enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
     g_object_set(print, "fpi-data", fp_data, NULL);
     g_object_ref(print);
     fpi_device_enroll_complete(dev, print, err);
+}
+
+static void
+enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
+{
+   
+    g_print("hello PA: enroll_started %d\n", fpi_ssm_get_cur_state(ssm));
+
+    enroll_iterate(dev);
+
+    
 }
 
 static void handle_get_enroll(FpDevice *dev,
@@ -441,11 +450,7 @@ enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
         break;
     case ENROLL_CMD_GET:
         g_print("hello PA: ENROLL_CMD_GET\n");
-        alloc_get_cmd_transfer(dev, ssm, handle_get_enroll);
-        break;
-    case ENROLL_UPDATE:
-        g_print("hello PA: ENROLL_UPDATE\n");
-        enroll_iterate(dev, ssm);
+        alloc_get_cmd_transfer(dev, handle_get_enroll,ssm);
         break;
     default:
         g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
@@ -460,7 +465,7 @@ enroll(FpDevice *dev)
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     /* do_init state machine first */
     FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
-                              ENROLL_FINAL);
+                              ENROLL_UPDATE);
 
     padev->enroll_passed = FALSE;
     padev->enroll_stage = 0;

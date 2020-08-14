@@ -1,3 +1,25 @@
+/*
+ * PixelAuth PrimeX driver for libfprint
+ * by Chester Lee <chester@lichester.com>
+ * 
+ * PrimeX is match on chip fingerprint module, 144x64 px
+ * 10 fingerprints slot inside
+ * 
+ * 
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; version
+ * 2.1 of the License.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+ */
 #include "drivers_api.h"
 
 struct _FpiDevicePa_Primex
@@ -26,8 +48,9 @@ static const FpIdEntry id_table[] = {
 
 enum initpa_states
 {
-    ABORT = 0,
-    DONE,
+    ABORT_PUT = 0,
+    ABORT_GET,
+    INIT_DONE,
 };
 
 typedef struct
@@ -37,7 +60,10 @@ typedef struct
 } EnrollStopData;
 
 #define PA_HEADER_LEN 5
+#define PA_LEN_LEN 2
 #define PA_INNER_HEADER_LEN 7
+#define PA_SW_LEN 2
+#define PA_MAX_GET_LEN 256
 #define PA_APDU_CLA 0xfe
 #define PA_CMD_ENROLL 0x71
 #define PA_CMD_DELETE 0x73
@@ -46,6 +72,12 @@ typedef struct
 #define PA_CMD_LIST 0x76
 #define PA_CMD_VERIFY 0x80
 #define PA_CMD_VID 0x81
+
+#define PA_OK 0
+#define PA_FPM_CONDITION 1
+#define PA_FPM_REFDATA 2
+#define PA_BUSY 3
+#define PA_ERROR -1
 
 #define TIMEOUT 5000
 #define PA_IN (2 | FPI_USB_ENDPOINT_IN)
@@ -57,12 +89,28 @@ const char *str_delete = "u2f delete fp";
 const char *str_abort = "u2f abort fp";
 const char *str_verify = "wbf verify fp";
 
-static void
-read_res_back(FpiUsbTransfer *transfer, FpDevice *device,
-              gpointer user_data, GError *error);
+typedef void (*handle_get_fn)(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error);
+
+struct prime_data
+{
+    gssize buflen;
+    guint8 *buffer;
+    handle_get_fn callback;
+    void *user_data;
+};
 
 static void
-handle_response(FpDevice *device, unsigned char *udata);
+alloc_get_cmd_transfer(FpDevice *device,
+                       FpiSsm *ssm,
+                       handle_get_fn callback);
+
+static void
+handle_response(FpiUsbTransfer *transfer, FpDevice *device,
+                gpointer user_data, GError *error);
 
 static void
 read_cb(FpiUsbTransfer *transfer, FpDevice *device,
@@ -70,6 +118,7 @@ read_cb(FpiUsbTransfer *transfer, FpDevice *device,
 
 static void
 alloc_send_cmd_transfer(FpDevice *dev,
+                        FpiSsm *ssm,
                         unsigned char ins,
                         unsigned char p1,
                         unsigned char p2,
@@ -79,7 +128,7 @@ alloc_send_cmd_transfer(FpDevice *dev,
     g_print("hello PA: alloc_send_cmd_transfer len=%d \n", len);
     g_print("hello PA: alloc_send_cmd_transfer %s \n", data);
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(dev);
-    fpi_usb_transfer_fill_bulk(transfer, PA_OUT, len + PA_HEADER_LEN + PA_INNER_HEADER_LEN);
+    fpi_usb_transfer_fill_bulk(transfer, PA_OUT, len + PA_HEADER_LEN + PA_LEN_LEN + PA_INNER_HEADER_LEN);
     memcpy(transfer->buffer, pa_header, PA_HEADER_LEN);
     transfer->buffer[5] = (len + PA_INNER_HEADER_LEN) >> 8;
     transfer->buffer[6] = (len + PA_INNER_HEADER_LEN) & 0xff;
@@ -87,60 +136,136 @@ alloc_send_cmd_transfer(FpDevice *dev,
     transfer->buffer[8] = ins;
     transfer->buffer[9] = p1;
     transfer->buffer[10] = p2;
-    transfer->buffer[10] = 0;
-    transfer->buffer[11] = len >> 8;
-    transfer->buffer[12] = len & 0xff;
+    transfer->buffer[11] = 0;
+    transfer->buffer[12] = len >> 8;
+    transfer->buffer[13] = len & 0xff;
     g_print("hello PA: alloc_send_cmd_transfer header one \n");
     if (len != 0)
-        memcpy(transfer->buffer + PA_HEADER_LEN + PA_INNER_HEADER_LEN, data, len);
+        memcpy(transfer->buffer + PA_HEADER_LEN + PA_LEN_LEN + PA_INNER_HEADER_LEN, data, len);
     g_print("hello PA: alloc_send_cmd_transfer leave\n");
-    fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, read_res_back, NULL);
+    transfer->ssm = ssm;
+    fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
     g_print("hello PA: fpi_usb_transfer_submit\n");
 }
 
 static void
-read_res_back(FpiUsbTransfer *transfer, FpDevice *device,
-              gpointer user_data, GError *error)
+alloc_get_cmd_transfer(FpDevice *device,
+                       FpiSsm *ssm,
+                       handle_get_fn callback)
 {
-    unsigned char *udata = user_data;
-    udata = g_realloc(udata, 128);
-    int needed = 7 + 2;
-    g_print("hello PA: read_res_back\n");
+    g_print("hello PA: alloc_get_cmd_transfer\n");
+    FpiUsbTransfer *transfer = fpi_usb_transfer_new(device);
+    struct prime_data *udata = g_new0(struct prime_data, 1);
 
-    FpiUsbTransfer *etransfer = fpi_usb_transfer_new(device);
+    udata->buflen = 0;
+    udata->buffer = NULL;
+    udata->callback = callback;
+    udata->user_data = ssm;
 
-    fpi_usb_transfer_fill_bulk_full(etransfer, PA_IN, udata, needed, NULL);
-    fpi_usb_transfer_submit(etransfer, TIMEOUT, NULL, read_cb, udata);
+    udata->buffer = g_realloc(udata->buffer, PA_MAX_GET_LEN);
+    udata->buflen = PA_MAX_GET_LEN;
+    fpi_usb_transfer_fill_bulk_full(transfer, PA_IN, udata->buffer, udata->buflen, NULL);
+    fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, read_cb, udata);
 }
 
 static void
 read_cb(FpiUsbTransfer *transfer, FpDevice *device,
         gpointer user_data, GError *error)
 {
-    unsigned char *udata = user_data;
-    g_print("hello PA: read_cb len = %d\n", transfer->actual_length);
-    handle_response(device, udata);
+    struct prime_data *udata = user_data;
+    g_print("hello PA: read_cb len = %ld\n", transfer->actual_length);
+    if (transfer->actual_length < PA_HEADER_LEN + PA_LEN_LEN + PA_SW_LEN)
+    {
+        g_print("hello PA: error %s\n", error->message);
+        return;
+    }
+
+    handle_response(transfer, device, user_data, NULL);
+
+    return;
 }
 
 static void
-handle_response(FpDevice *device, unsigned char *udata)
+handle_response(FpiUsbTransfer *transfer, FpDevice *device,
+                gpointer user_data, GError *error)
 {
-    g_print("hello PA: handle_response %d %d %d \n", udata[0], udata[1], udata[2]);
+    g_print("hello PA: handle_response\n");
+    struct prime_data *udata = user_data;
+
+    if (error)
+    {
+        g_print("hello PA:Error in handle_response %d\n", error);
+        g_free(udata->buffer);
+        g_free(udata);
+        return;
+    }
+    guint8 *buf = udata->buffer;
+    guint16 len = transfer->actual_length;
+    udata->callback(device, buf, len, udata->user_data, NULL);
 }
 
-static void pa_abort(FpDevice *dev)
+static int get_sw(unsigned char *data, size_t data_len)
 {
-    g_print("hello PA: pa_abort \n");
-    alloc_send_cmd_transfer(dev, PA_CMD_ABORT, 0, 0, str_abort, strlen(str_abort));
+    int len = data[6];
+    if (data[7 + len - 2] == 0x90 && data[8 + len - 2] == 0)
+        return 0;
+    //TODO:should report error message here
+    if (data[7 + len - 2] == 0x6f && data[8 + len - 2] == 3)
+        return PA_FPM_CONDITION;
+    if (data[7 + len - 2] == 0x6f && data[8 + len - 2] == 5)
+        return PA_FPM_REFDATA;
+
+    g_print("PA: SW error %x %x\n", data[7 + len - 2], data[8 + len - 2]);
+    return PA_ERROR;
 }
 
+int get_data(unsigned char *data, size_t data_len, unsigned char *buf)
+{
+    int len = data[6];
+    if (len = PA_SW_LEN)
+        return 0;
+    if (len > PA_SW_LEN)
+        memcpy(buf, data + 7, len - PA_SW_LEN);
+    return len - PA_SW_LEN;
+}
+
+static void handle_get_abort(FpDevice *dev,
+                             unsigned char *data,
+                             size_t data_len,
+                             void *user_data,
+                             GError *error)
+{
+    FpiSsm *ssm = user_data;
+    g_print("hello PA:handle_get_abort %d\n", data_len);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK || result == PA_FPM_CONDITION)
+        fpi_ssm_next_state(ssm);
+    else
+    {
+        //TODO: error handle
+    }
+}
 static void
 initpa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
-    g_print("hello PA: initsm_run_state\n");
-    pa_abort(dev);
     g_print("hello PA: initsm_run_state %d\n", fpi_ssm_get_cur_state(ssm));
-    fpi_ssm_next_state(ssm);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    g_print("hello PA: enroll_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    switch (fpi_ssm_get_cur_state(ssm))
+    {
+    case ABORT_PUT:
+        g_print("hello PA: ABORT_PUT\n");
+        //alloc_send_cmd_transfer(dev, ssm, PA_CMD_ABORT, 0, 0, str_abort, strlen(str_abort));
+        alloc_send_cmd_transfer(dev, ssm, PA_CMD_ABORT, 0, 0, str_abort, strlen(str_abort));
+        break;
+    case ABORT_GET:
+        g_print("hello PA: ABORT_GET\n");
+        alloc_get_cmd_transfer(dev, ssm, handle_get_abort);
+        break;
+    default:
+        g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        break;
+    }
 }
 
 static void
@@ -166,7 +291,7 @@ dev_init(FpDevice *dev)
 
     padev->seq = 0xf0; /* incremented to 0x00 before first cmd */
 
-    ssm = fpi_ssm_new(dev, initpa_run_state, DONE);
+    ssm = fpi_ssm_new(dev, initpa_run_state, INIT_DONE);
     fpi_ssm_start(ssm, initpa_done);
 }
 
@@ -247,7 +372,6 @@ enroll(FpDevice *dev)
 {
     g_print("hello PA: enroll\n");
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
-    sleep(2);
     /* do_init state machine first */
     FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
                               ENROLL_FINAL);

@@ -23,9 +23,184 @@
 #include "drivers_api.h"
 #include "pa_primex.h"
 
-G_DECLARE_FINAL_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FPI, DEVICE_PA_PRIME,
-                     FpDevice);
+struct _FpiDevicePa_Primex
+{
+    FpDevice parent;
+    gint enroll_stage;
+    GPtrArray *list_result;
+};
+
+G_DECLARE_FINAL_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FPI, DEVICE_PA_PRIME, FpDevice);
 G_DEFINE_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FP_TYPE_DEVICE);
+
+static void
+fpi_device_pa_primex_init(FpiDevicePa_Primex *self)
+{
+    g_print("hello PA: fpi_device_pa_primex_init\n");
+}
+
+static char *
+get_pa_data_descriptor (FpPrint *print, FpDevice *dev, FpFinger finger)
+{
+  const char *driver;
+  const char *dev_id;
+
+  if (print)
+    {
+      driver = fp_print_get_driver (print);
+      dev_id = fp_print_get_device_id (print);
+    }
+  else
+    {
+      driver = fp_device_get_driver (dev);
+      dev_id = fp_device_get_device_id (dev);
+    }
+
+  return g_strdup_printf ("%s/%s/%x",
+                          driver,
+                          dev_id,
+                          finger);
+}
+
+static GVariantDict *
+_load_data (void)
+{
+  GVariantDict *res;
+  GVariant *var;
+  gchar *contents = NULL;
+  gsize length = 0;
+
+  if (!g_file_get_contents (STORAGE_FILE, &contents, &length, NULL))
+    {
+      g_warning ("Error loading storage, assuming it is empty");
+      return g_variant_dict_new (NULL);
+    }
+
+  var = g_variant_new_from_data (G_VARIANT_TYPE_VARDICT,
+                                 contents,
+                                 length,
+                                 FALSE,
+                                 g_free,
+                                 contents);
+
+  res = g_variant_dict_new (var);
+  g_variant_unref (var);
+  return res;
+}
+
+static int
+_save_data (GVariant *data)
+{
+  const gchar *contents = NULL;
+  gsize length;
+
+  length = g_variant_get_size (data);
+  contents = (gchar *) g_variant_get_data (data);
+
+  if (!g_file_set_contents (STORAGE_FILE, contents, length, NULL))
+    {
+      g_warning ("Error saving storage,!");
+      return -1;
+    }
+
+  g_variant_ref_sink (data);
+  g_variant_unref (data);
+
+  return 0;
+}
+
+FpPrint *
+pa_data_load (FpDevice *dev, FpFinger finger)
+{
+  g_autofree gchar *descr = get_pa_data_descriptor (NULL, dev, finger);
+
+  g_autoptr(GVariant) val = NULL;
+  g_autoptr(GVariantDict) dict = NULL;
+  const guchar *stored_data = NULL;
+  gsize stored_len;
+
+  dict = _load_data ();
+  val = g_variant_dict_lookup_value (dict, descr, G_VARIANT_TYPE ("ay"));
+
+  if (val)
+    {
+      FpPrint *print;
+      g_autoptr(GError) error = NULL;
+
+      stored_data = (const guchar *) g_variant_get_fixed_array (val, &stored_len, 1);
+      print = fp_print_deserialize (stored_data, stored_len, &error);
+
+      if (error)
+        g_warning ("Error deserializing data: %s", error->message);
+
+      return print;
+    }
+
+  return NULL;
+}
+
+int
+pa_data_save (FpPrint *print, FpFinger finger)
+{
+  g_autofree gchar *descr = get_pa_data_descriptor (print, NULL, finger);
+
+  g_autoptr(GError) error = NULL;
+  g_autoptr(GVariantDict) dict = NULL;
+  g_autofree guchar *data = NULL;
+  GVariant *val;
+  gsize size;
+  int res;
+
+  dict = _load_data ();
+
+  fp_print_serialize (print, &data, &size, &error);
+  if (error)
+    {
+      g_warning ("Error serializing data: %s", error->message);
+      return -1;
+    }
+  val = g_variant_new_fixed_array (G_VARIANT_TYPE ("y"), data, size, 1);
+  g_variant_dict_insert_value (dict, descr, val);
+
+  res = _save_data (g_variant_dict_end (dict));
+
+  return res;
+}
+
+static gboolean
+parse_print_data(GVariant *data,
+                 guint8 *finger,
+                 const guint8 **user_id,
+                 gsize *user_id_len)
+{
+    g_autoptr(GVariant) user_id_var = NULL;
+
+    g_return_val_if_fail(data != NULL, FALSE);
+    g_return_val_if_fail(finger != NULL, FALSE);
+    g_return_val_if_fail(user_id != NULL, FALSE);
+    g_return_val_if_fail(user_id_len != NULL, FALSE);
+
+    *user_id = NULL;
+    *user_id_len = 0;
+
+    if (!g_variant_check_format_string(data, "(y@ay)", FALSE))
+        return FALSE;
+
+    g_variant_get(data,
+                  "(y@ay)",
+                  finger,
+                  &user_id_var);
+
+    *user_id = g_variant_get_fixed_array(user_id_var, user_id_len, 1);
+
+    if (*user_id_len == 0 || *user_id_len > 100)
+        return FALSE;
+
+    if (*user_id_len <= 0 || *user_id[0] == ' ')
+        return FALSE;
+
+    return TRUE;
+}
 
 static void
 alloc_send_cmd_transfer(FpDevice *dev,
@@ -137,28 +312,29 @@ static int get_data(unsigned char *data, size_t data_len, unsigned char *buf)
         memcpy(buf, data + 7, len - PA_SW_LEN);
     return len - PA_SW_LEN;
 }
-
-static void handle_get_abort(FpDevice *dev,
-                             unsigned char *data,
-                             size_t data_len,
-                             void *user_data,
-                             GError *error)
+/* -----------------------------Init group -----------------------------------*/
+static void
+dev_init(FpDevice *dev)
 {
-    FpiSsm *ssm = user_data;
-    g_print("hello PA:handle_get_abort %ld\n", data_len);
-    int result = get_sw(data, data_len);
-    if (result == PA_OK || result == PA_FPM_CONDITION)
-        fpi_ssm_next_state(ssm);
-    else
+    g_print("hello PA: dev_init\n");
+    FpiSsm *ssm;
+    GError *error = NULL;
+
+    if (!g_usb_device_claim_interface(fpi_device_get_usb_device(dev), 0, 0, &error))
     {
-        //TODO: error handle
+        fpi_device_open_complete(dev, error);
+        return;
     }
+
+    ssm = fpi_ssm_new(dev, initpa_run_state, INIT_DONE);
+    fpi_ssm_start(ssm, initpa_done);
 }
+
 static void
 initpa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
     g_print("hello PA: initsm_run_state %d\n", fpi_ssm_get_cur_state(ssm));
-    g_print("hello PA: enroll_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    g_print("hello PA: initsm_run_state %d\n", fpi_ssm_get_cur_state(ssm));
     switch (fpi_ssm_get_cur_state(ssm))
     {
     case ABORT_PUT:
@@ -176,11 +352,131 @@ initpa_run_state(FpiSsm *ssm, FpDevice *dev)
     }
 }
 
+static void handle_get_abort(FpDevice *dev,
+                             unsigned char *data,
+                             size_t data_len,
+                             void *user_data,
+                             GError *error)
+{
+    FpiSsm *ssm = user_data;
+    g_print("hello PA:handle_get_abort %ld\n", data_len);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK || result == PA_FPM_CONDITION)
+        fpi_ssm_next_state(ssm);
+    else
+    {
+        //TODO: error handle
+    }
+}
+
 static void
 initpa_done(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
     g_print("hello PA: initpa_done\n");
+    // FpPrint *print = NULL;
+
+    // g_autoptr(GVariant) data = NULL;
+    // guint8 finger;
+    // const guint8 *user_id;
+    // gsize user_id_len = 0;
+
+    // fpi_device_get_verify_data(dev, &print);
+
+    // g_object_get(print, "fpi-data", &data, NULL);
+    // g_debug("data is %p", data);
+    // if (!parse_print_data(data, &finger, &user_id, &user_id_len))
+    // {
+    //     fpi_device_verify_complete(dev,fpi_device_error_new(FP_DEVICE_ERROR_DATA_INVALID));
+    //     return;
+    // }
     fpi_device_open_complete(dev, error);
+}
+/* -----------------------------De-Init group -----------------------------------*/
+static void
+dev_exit(FpDevice *dev)
+{
+    g_print("hello PA: dev_exit\n");
+    GError *error = NULL;
+
+    g_usb_device_release_interface(fpi_device_get_usb_device(dev), 0, 0, &error);
+
+    fpi_device_close_complete(dev, error);
+}
+
+/* -----------------------------Enroll group -----------------------------------*/
+static void
+enroll(FpDevice *dev)
+{
+    g_print("hello PA: enroll\n");
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    FpPrint *print = NULL;
+    g_autoptr(GVariant) data = NULL;
+    g_autofree gchar *user_id = NULL;
+    fpi_device_get_enroll_data(dev, &print);
+    user_id = fpi_print_generate_user_id(print);
+    g_debug("user_id: %s, finger: %d", user_id, print);
+
+    G_DEBUG_HERE();
+    g_object_get(print, "fpi-data", &data, NULL);
+    g_debug("data is %p", data);
+    /* do_init state machine first */
+    // FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
+    //                           ENROLL_UPDATE);
+
+    // padev->enroll_stage = 0;
+    // fpi_ssm_start(ssm, enroll_started);
+}
+
+static void
+enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
+{
+    g_print("hello PA: enroll_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    switch (fpi_ssm_get_cur_state(ssm))
+    {
+    case ENROLL_CMD_SEND:
+        g_print("hello PA: ENROLL_CMD_SEND\n");
+        alloc_send_cmd_transfer(dev, ssm, PA_CMD_ENROLL, 0, 0, (unsigned char *)str_enroll, strlen(str_enroll));
+        break;
+    case ENROLL_CMD_GET:
+        g_print("hello PA: ENROLL_CMD_GET\n");
+        alloc_get_cmd_transfer(dev, handle_get_enroll, ssm);
+        break;
+    default:
+        g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        break;
+    }
+}
+
+static void handle_get_enroll(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error)
+{
+    FpiSsm *ssm = user_data;
+    g_print("hello PA:handle_get_enroll %ld\n", data_len);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK)
+        fpi_ssm_next_state(ssm);
+    else
+    {
+        //TODO: error handle
+    }
+}
+
+static void
+enroll_iterate(FpDevice *dev)
+{
+    g_print("hello PA: enroll_iterate\n");
+    alloc_send_cmd_transfer(dev, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
+}
+
+static void
+enroll_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
+                      gpointer user_data, GError *error)
+{
+    g_print("hello PA: enroll_iterate_cmd_cb\n");
+    alloc_get_cmd_transfer(device, handle_enroll_iterate_cb, NULL);
 }
 
 static void handle_enroll_iterate_cb(FpDevice *dev,
@@ -227,39 +523,6 @@ static void handle_enroll_iterate_cb(FpDevice *dev,
 }
 
 static void
-enroll_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
-                      gpointer user_data, GError *error)
-{
-    g_print("hello PA: enroll_iterate_cmd_cb\n");
-    alloc_get_cmd_transfer(device, handle_enroll_iterate_cb, NULL);
-}
-
-static void
-enroll_iterate(FpDevice *dev)
-{
-    g_print("hello PA: enroll_iterate\n");
-    alloc_send_cmd_transfer(dev, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
-}
-
-static void
-do_enroll_done(FpDevice *dev)
-{
-    const char *p = "finger1\n";
-    FpPrint *print = NULL;
-    GError *err = NULL;
-    GVariant *fp_data;
-    fpi_device_get_enroll_data(dev, &print);
-    fp_data = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
-                                        p,
-                                        strlen(p),
-                                        1);
-    fpi_print_set_type(print, FPI_PRINT_RAW);
-    g_object_set(print, "fpi-data", fp_data, NULL);
-    g_object_ref(print);
-    fpi_device_enroll_complete(dev, print, err);
-}
-
-static void
 enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
 
@@ -268,46 +531,32 @@ enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
     enroll_iterate(dev);
 }
 
-static void handle_get_enroll(FpDevice *dev,
-                              unsigned char *data,
-                              size_t data_len,
-                              void *user_data,
-                              GError *error)
+static void
+do_enroll_done(FpDevice *dev)
 {
-    FpiSsm *ssm = user_data;
-    g_print("hello PA:handle_get_enroll %ld\n", data_len);
-    int result = get_sw(data, data_len);
-    if (result == PA_OK)
-        fpi_ssm_next_state(ssm);
-    else
-    {
-        //TODO: error handle
-    }
+    FpPrint *print = NULL;
+    GError *err = NULL;
+    save_finger(dev, print);
+    fpi_device_enroll_complete(dev, print, err);
 }
+/* -----------------------------Verify group -----------------------------------*/
+static void
+verify(FpDevice *dev)
+{
+    g_print("hello PA: verify\n");
+    // FpiSsm *ssm = fpi_ssm_new(dev, verify_start_pa_run_state, VERIFY_FINAL);
+    // fpi_ssm_start(ssm, verify_started);
+    FpPrint *print = NULL;
 
-static void
-enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
-{
-    g_print("hello PA: enroll_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
-    switch (fpi_ssm_get_cur_state(ssm))
-    {
-    case ENROLL_CMD_SEND:
-        g_print("hello PA: ENROLL_CMD_SEND\n");
-        alloc_send_cmd_transfer(dev, ssm, PA_CMD_ENROLL, 0, 0, (unsigned char *)str_enroll, strlen(str_enroll));
-        break;
-    case ENROLL_CMD_GET:
-        g_print("hello PA: ENROLL_CMD_GET\n");
-        alloc_get_cmd_transfer(dev, handle_get_enroll, ssm);
-        break;
-    default:
-        g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
-        break;
-    }
-}
-static void
-verify_iterate(FpDevice *dev)
-{
-    g_print("hello PA: verify_iterate\n");
+    g_autoptr(GVariant) data = NULL;
+    guint8 finger;
+    const guint8 *user_id;
+    gsize user_id_len = 0;
+
+    fpi_device_get_verify_data(dev, &print);
+
+    g_object_get(print, "fpi-data", &data, NULL);
+    g_debug("data is %p", data);
 }
 
 static void
@@ -330,8 +579,11 @@ verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
         break;
     }
 }
-
-
+static void
+verify_iterate(FpDevice *dev)
+{
+    g_print("hello PA: verify_iterate\n");
+}
 
 static void
 verify_started(FpiSsm *ssm, FpDevice *dev, GError *error)
@@ -340,82 +592,131 @@ verify_started(FpiSsm *ssm, FpDevice *dev, GError *error)
     fpi_device_verify_report(dev, FPI_MATCH_SUCCESS, NULL, NULL);
     fpi_device_verify_complete(dev, err);
 }
-
-
+/* -----------------------------List group -----------------------------------*/
 static void
-fpi_device_pa_primex_init(FpiDevicePa_Primex *self)
+save_finger(FpDevice *device, FpPrint *print)
 {
-    g_print("hello PA: fpi_device_pa_primex_init\n");
-}
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(device);
+    //padev->list_result = g_ptr_array_new_with_free_func(g_object_unref);
+    //pa_finger_list_t l;
+    //l.total_number = 1;
 
-static void
-dev_init(FpDevice *dev)
-{
-    g_print("hello PA: dev_init\n");
-    FpiSsm *ssm;
-    GError *error = NULL;
-    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    //FpPrint *print = fp_print_new(FP_DEVICE(device));
+    gchar *userid;
+    g_autofree gchar *user_id = NULL;
+    gssize user_id_len;
 
-    if (!g_usb_device_claim_interface(fpi_device_get_usb_device(dev), 0, 0, &error))
-    {
-        fpi_device_open_complete(dev, error);
-        return;
-    }
+    fpi_device_get_enroll_data(device, &print);
+    G_DEBUG_HERE();
+    user_id = fpi_print_generate_user_id(print);
+    user_id_len = strlen(user_id);
+    g_print("hello PA: gen_report  %s len =%d \n", userid, user_id_len);
 
-    padev->seq = 0xf0; /* incremented to 0x00 before first cmd */
+    GVariant *data = NULL;
+    GVariant *uid = NULL;
+    uid = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
+                                    user_id,
+                                    user_id_len,
+                                    1);
+    data = g_variant_new("(y@ay)",
+                         3,
+                         uid);
+    fpi_print_set_type(print, FPI_PRINT_RAW);
+    fpi_print_set_device_stored(print, TRUE);
+    g_object_set(print, "fpi-data", data, NULL);
+    g_object_set(print, "description", pa_description, NULL);
+    fpi_print_fill_from_user_id(print, user_id);
 
-    ssm = fpi_ssm_new(dev, initpa_run_state, INIT_DONE);
-    fpi_ssm_start(ssm, initpa_done);
-}
-
-static void
-dev_exit(FpDevice *dev)
-{
-    g_print("hello PA: dev_exit\n");
-    GError *error = NULL;
-
-    g_usb_device_release_interface(fpi_device_get_usb_device(dev), 0, 0, &error);
-
-    fpi_device_close_complete(dev, error);
-}
-
-
-static void
-enroll(FpDevice *dev)
-{
-    g_print("hello PA: enroll\n");
-    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
-    /* do_init state machine first */
-    FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
-                              ENROLL_UPDATE);
-
-    padev->enroll_passed = FALSE;
-    padev->enroll_stage = 0;
-    fpi_ssm_start(ssm, enroll_started);
-}
-
-
-
-static void
-verify(FpDevice *dev)
-{
-    g_print("hello PA: verify\n");
-    FpiSsm *ssm = fpi_ssm_new(dev, verify_start_pa_run_state, VERIFY_FINAL);
-    fpi_ssm_start(ssm, verify_started);
-}
-
-static void
-delete(FpDevice *device)
-{
-
+    //g_ptr_array_add(padev->list_result, g_object_ref_sink(print));
+    // fpi_device_list_complete(FP_DEVICE(padev),
+    //                          g_steal_pointer(&padev->list_result),
+    //                          NULL);
 }
 
 static void
 list(FpDevice *device)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(device);
+    padev->list_result = g_ptr_array_new_with_free_func(g_object_unref);
+    pa_finger_list_t l;
+    l.total_number = 1;
+    FpPrint *print = fp_print_new(FP_DEVICE(device));
+    GVariant *data = NULL;
+    GVariant *uid = NULL;
 
+    uid = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
+                                    "root",
+                                    4,
+                                    1);
+    data = g_variant_new("(y@ay)",
+                         3,
+                         uid);
+
+    fpi_print_set_type(print, FPI_PRINT_RAW);
+    fpi_print_set_device_stored(print, TRUE);
+    g_object_set(print, "fpi-data", data, NULL);
+    g_object_set(print, "description", pa_description, NULL);
+    fp_print_set_username(print,"root");
+    fp_print_set_finger(print,3);
+
+    fpi_print_fill_from_user_id(print, "root");
+    g_ptr_array_add(padev->list_result, g_object_ref_sink(print));
+    fpi_device_list_complete(FP_DEVICE(device),
+                             g_steal_pointer(&padev->list_result),
+                             NULL);
+}
+/* -----------------------------Delete group -----------------------------------*/
+static void delete (FpDevice *device)
+{
+    g_print("hello PA: verify\n");
+    FpiSsm *ssm = fpi_ssm_new(device, delete_cmd_state, DELETE_DONE);
+    fpi_ssm_start(ssm, delete_done);
 }
 
+static void
+delete_cmd_state(FpiSsm *ssm, FpDevice *dev)
+{
+    g_print("hello PA: delete_cmd_state %d\n", fpi_ssm_get_cur_state(ssm));
+    switch (fpi_ssm_get_cur_state(ssm))
+    {
+    case DELETE_SEND:
+        g_print("hello PA: DELETE_SEND\n");
+        alloc_send_cmd_transfer(dev, ssm, PA_CMD_DELETE, 0, 0, (unsigned char *)str_delete, strlen(str_delete));
+        break;
+    case DELETE_GET:
+        g_print("hello PA: DELETE_GET\n");
+        alloc_get_cmd_transfer(dev, handle_get_delete, ssm);
+        break;
+    default:
+        g_print("hello PA: delete_cmd_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        break;
+    }
+}
+
+static void handle_get_delete(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error)
+{
+    FpiSsm *ssm = user_data;
+    g_print("hello PA:handle_get_enroll %ld\n", data_len);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK)
+        fpi_ssm_next_state(ssm);
+    else
+    {
+        //TODO: error handle
+    }
+}
+
+static void
+delete_done(FpiSsm *ssm, FpDevice *dev, GError *error)
+{
+    fpi_device_delete_complete(dev, NULL);
+}
+
+//main entry
 static void
 fpi_device_pa_primex_class_init(FpiDevicePa_PrimexClass *klass)
 {
@@ -437,4 +738,3 @@ fpi_device_pa_primex_class_init(FpiDevicePa_PrimexClass *klass)
     dev_class->delete = delete;
     dev_class->list = list; //ifdef list, the device has storage will return true
 }
-

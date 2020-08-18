@@ -13,6 +13,8 @@
 #define PA_CMD_VERIFY 0x80
 #define PA_CMD_VID 0x81
 
+#define PA_MAX_FINGER_COUNT 10
+
 #define PA_OK 0
 #define PA_FPM_CONDITION 1
 #define PA_FPM_REFDATA 2
@@ -37,6 +39,7 @@ const char *str_delete = "u2f delete fp";
 const char *str_abort = "u2f abort fp";
 const char *str_verify = "wbf verify fp";
 
+#define STORAGE_FILE "pa-storage.variant"
 
 enum pa_primex_driver_data
 {
@@ -64,6 +67,20 @@ enum verify_start_pa_states
     VERIFY_FINAL
 };
 
+enum delete_cmd_states
+{
+    DELETE_SEND = 0,
+    DELETE_GET,
+    DELETE_DONE
+};
+
+enum list_cmd_states
+{
+    LIST_SEND = 0,
+    LIST_GET,
+    LIST_DONE
+};
+
 static const FpIdEntry id_table[] = {
     {.vid = 0x2F0A, .pid = 0x0201, .driver_data = PRIMEX},
     {.vid = 0, .pid = 0, .driver_data = 0},
@@ -75,6 +92,11 @@ typedef struct
     GError *error;
 } EnrollStopData;
 
+typedef struct pa_finger_list
+{
+  int                total_number;                                   /**< Total query response messages */
+  unsigned char      finger_map[PA_MAX_FINGER_COUNT];
+} pa_finger_list_t;
 
 typedef void (*handle_get_fn)(FpDevice *dev,
                               unsigned char *data,
@@ -90,47 +112,71 @@ struct prime_data
     void *user_data;
 };
 
-struct _FpiDevicePa_Primex
-{
-    FpDevice parent;
+const char* pa_description = "PixelAuth inside";
 
-    gboolean enroll_passed;
-    gint enroll_stage;
-    gboolean first_verify_iteration;
-    guint8 seq; /* FIXME: improve/automate seq handling */
-};
-
-
+/*USB layer group*/
 static void
-alloc_get_cmd_transfer(FpDevice *device,
-                       handle_get_fn callback,
-                       void *user_data);
-
+alloc_send_cmd_transfer(FpDevice *dev,
+                        FpiSsm *ssm,
+                        unsigned char ins,
+                        unsigned char p1,
+                        unsigned char p2,
+                        const unsigned char *data,
+                        guint16 len);
+static void alloc_get_cmd_transfer(FpDevice *device, handle_get_fn callback, void *user_data);
+static void read_cb(FpiUsbTransfer *transfer, FpDevice *device, gpointer user_data, GError *error);
+static void handle_response(FpDevice *device, FpiUsbTransfer *transfer, struct prime_data *udata);
+static int get_sw(unsigned char *data, size_t data_len);
+static int get_data(unsigned char *data, size_t data_len, unsigned char *buf);
+/* Init group*/
+static void dev_init(FpDevice *dev);
+static void initpa_run_state(FpiSsm *ssm, FpDevice *dev);
+static void handle_get_abort(FpDevice *dev,
+                             unsigned char *data,
+                             size_t data_len,
+                             void *user_data,
+                             GError *error);
+static void initpa_done(FpiSsm *ssm, FpDevice *dev, GError *error);
+/*Deinit group*/
+static void dev_exit(FpDevice *dev);
+/*Enroll group*/
+static void enroll(FpDevice *dev);
+static void enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev);
+static void handle_get_enroll(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error);
+static void enroll_iterate(FpDevice *dev);
 static void
-handle_response(FpDevice *device, FpiUsbTransfer *transfer, struct prime_data *udata);
-
+enroll_iterate_cmd_cb(FpiUsbTransfer *transfer,
+                      FpDevice *device,
+                      gpointer user_data,
+                      GError *error);
 static void
-read_cb(FpiUsbTransfer *transfer, FpDevice *device,
-        gpointer user_data, GError *error);
+handle_enroll_iterate_cb(FpDevice *dev,
+                         unsigned char *data,
+                         size_t data_len,
+                         void *user_data,
+                         GError *error);
+static void enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error);
+static void do_enroll_done(FpDevice *dev);
+static void save_finger(FpDevice *device, FpPrint *print);
 
-static void handle_enroll_iterate_cb(FpDevice *dev,
-                                     unsigned char *data,
-                                     size_t data_len,
-                                     void *user_data,
-                                     GError *error);
-static void
-enroll_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
-                      gpointer user_data, GError *error);
+/*Verify group*/
+static void verify(FpDevice *dev);
+static void verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev);
+static void verify_iterate(FpDevice *dev);
+static void verify_started(FpiSsm *ssm, FpDevice *dev, GError *error);
+/*List group*/
+static void list(FpDevice *device);
 
-static void
-enroll_iterate(FpDevice *dev);
-
-static void
-do_enroll_done(FpDevice *dev);
-
-static void
-delete(FpDevice *device);
-
-static void
-list(FpDevice *device);
-
+/*Delete group*/
+static void delete (FpDevice *device);
+static void delete_cmd_state(FpiSsm *ssm, FpDevice *dev);
+static void handle_get_delete(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error);
+static void delete_done(FpiSsm *ssm, FpDevice *dev, GError *error);

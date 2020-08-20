@@ -19,6 +19,7 @@
 #define PA_FPM_CONDITION 1
 #define PA_FPM_REFDATA 2
 #define PA_BUSY 3
+#define PA_P1P2 4
 #define PA_ERROR -1
 
 #define PA_FPM_ENROLL_OK 0xe1
@@ -55,15 +56,39 @@ enum initpa_states
 
 enum enroll_start_pa_states
 {
-    ENROLL_CMD_SEND = 0,
+    ENROLL_LIST_BEFORE_SEND = 0,
+    ENROLL_LIST_BEFORE_GET,
+    ENROLL_CMD_SEND,
     ENROLL_CMD_GET,
     ENROLL_UPDATE
 };
 
+enum enroll_finish_pa_states
+{
+    ENROLL_LIST_AFTER_SEND = 0,
+    ENROLL_LIST_AFTER_GET,
+    ENROLL_DONE
+};
+
+
+enum list_pa_states
+{
+    LIST_AFTER_SEND = 0,
+    LIST_AFTER_GET,
+    LIST_AFTER_DONE
+};
+
 enum verify_start_pa_states
 {
-    VERIFY_INIT = 0,
-    VERIFY_UPDATE,
+    VERIFY_CMD_SEND = 0,
+    VERIFY_CMD_GET,
+    VERIFY_UPDATE
+};
+
+enum verify_finish_pa_states
+{
+    VERIFY_GET_ID_SEND = 0,
+    VERIFY_GET_ID_GET,
     VERIFY_FINAL
 };
 
@@ -96,6 +121,7 @@ typedef struct pa_finger_list
 {
   int                total_number;                                   /**< Total query response messages */
   unsigned char      finger_map[PA_MAX_FINGER_COUNT];
+  int                modified_by;
 } pa_finger_list_t;
 
 typedef void (*handle_get_fn)(FpDevice *dev,
@@ -112,7 +138,16 @@ struct prime_data
     void *user_data;
 };
 
-const char* pa_description = "PixelAuth inside";
+const char* pa_description = "/dev/";
+
+/*Storage group*/
+static char *get_pa_data_descriptor (FpPrint *print, FpDevice *dev, FpFinger finger);
+static GVariantDict *_load_data (void);
+static int _save_data (GVariant *data);
+FpPrint *pa_data_load (FpDevice *dev, FpFinger finger);
+int pa_data_save (FpPrint *print, FpFinger finger);
+int pa_data_del(FpDevice *dev, FpFinger finger);
+int get_dev_index(FpDevice* dev, FpPrint *print);
 
 /*USB layer group*/
 static void
@@ -128,6 +163,7 @@ static void read_cb(FpiUsbTransfer *transfer, FpDevice *device, gpointer user_da
 static void handle_response(FpDevice *device, FpiUsbTransfer *transfer, struct prime_data *udata);
 static int get_sw(unsigned char *data, size_t data_len);
 static int get_data(unsigned char *data, size_t data_len, unsigned char *buf);
+
 /* Init group*/
 static void dev_init(FpDevice *dev);
 static void initpa_run_state(FpiSsm *ssm, FpDevice *dev);
@@ -137,8 +173,10 @@ static void handle_get_abort(FpDevice *dev,
                              void *user_data,
                              GError *error);
 static void initpa_done(FpiSsm *ssm, FpDevice *dev, GError *error);
+
 /*Deinit group*/
 static void dev_exit(FpDevice *dev);
+
 /*Enroll group*/
 static void enroll(FpDevice *dev);
 static void enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev);
@@ -161,15 +199,25 @@ handle_enroll_iterate_cb(FpDevice *dev,
                          GError *error);
 static void enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error);
 static void do_enroll_done(FpDevice *dev);
-static void save_finger(FpDevice *device, FpPrint *print);
+static void enroll_save(FpiSsm *ssm, FpDevice *dev, GError *error);
+static void enroll_finish_pa_run_state(FpiSsm *ssm, FpDevice *dev);
+static void gen_finger(FpDevice *device, int dev_index, FpPrint *print);
 
 /*Verify group*/
 static void verify(FpDevice *dev);
 static void verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev);
 static void verify_iterate(FpDevice *dev);
 static void verify_started(FpiSsm *ssm, FpDevice *dev, GError *error);
+
 /*List group*/
 static void list(FpDevice *device);
+static void list_done(FpiSsm *ssm, FpDevice *device, GError *error);
+static void handle_get_list(FpDevice *dev,
+                              unsigned char *data,
+                              size_t data_len,
+                              void *user_data,
+                              GError *error);
+static void list_pa_run_state(FpiSsm *ssm, FpDevice *dev);
 
 /*Delete group*/
 static void delete (FpDevice *device);

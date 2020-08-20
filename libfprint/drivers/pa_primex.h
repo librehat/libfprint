@@ -20,14 +20,20 @@
 #define PA_FPM_REFDATA 2
 #define PA_BUSY 3
 #define PA_P1P2 4
+#define PA_NOSPACE 5
 #define PA_ERROR -1
 
 #define PA_FPM_ENROLL_OK 0xe1
 #define PA_FPM_ENROLL_GOOD 0xe4
+#define PA_FPM_ENROLL_CANCEL 0xe3
 #define PA_FPM_ENROLL_REDUNDANT 0xe5
 #define PA_FPM_ENROLL_NOFINGER 0xe7
 #define PA_FPM_ENROLL_NOTFULLFINGER 0xe8
 #define PA_FPM_ENROLL_WAITING 0xe0
+#define PA_FPM_VERIFY_WAITING 0xf0
+#define PA_FPM_VERIFY_OK 0xf1
+#define PA_FPM_VERIFY_FAIL 0xf2
+#define PA_FPM_VERIFY_CANCEL 0xf3
 #define PA_FPM_IDLE 0
 
 #define TIMEOUT 5000
@@ -208,7 +214,22 @@ static void verify(FpDevice *dev);
 static void verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev);
 static void verify_iterate(FpDevice *dev);
 static void verify_started(FpiSsm *ssm, FpDevice *dev, GError *error);
-
+static void
+handle_get_vid(FpDevice *dev,
+                            unsigned char *data,
+                            size_t data_len,
+                            void *user_data,
+                            GError *error);
+static void verify_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,gpointer user_data, GError *error);
+static void
+handle_verify_iterate_cb(FpDevice *dev,
+                         unsigned char *data,
+                         size_t data_len,
+                         void *user_data,
+                         GError *error);
+static void do_verify_done(FpDevice *dev);  
+static void verify_finish_pa_run_state(FpiSsm *ssm, FpDevice *dev);
+static void verify_report(FpiSsm *ssm, FpDevice *dev, GError *error);                     
 /*List group*/
 static void list(FpDevice *device);
 static void list_done(FpiSsm *ssm, FpDevice *device, GError *error);

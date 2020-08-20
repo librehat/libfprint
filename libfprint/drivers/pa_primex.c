@@ -41,18 +41,19 @@ struct _FpiDevicePa_Primex
     FpDevice parent;
     gint enroll_stage;
     GPtrArray *list_result;
+    unsigned char matched_index[PA_MAX_FINGER_COUNT];
+    gint opt_stage;
+    pa_finger_list_t g_list;   //only use to figure enroll change out
+    pa_finger_list_t original; //only use to figure enroll change out
 };
-
-pa_finger_list_t g_list;   //only use to figure enroll change out
-pa_finger_list_t original; //only use to figure enroll change out
 
 G_DECLARE_FINAL_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FPI, DEVICE_PA_PRIME, FpDevice);
 G_DEFINE_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FP_TYPE_DEVICE);
 
-static void p_print(unsigned char* buf, int len)
+static void p_print(unsigned char *buf, int len)
 {
     g_print("buf len = %d \n", len);
-    for(int i =0; i < len; i++)
+    for (int i = 0; i < len; i++)
     {
         g_print("0x%x ", buf[i]);
     }
@@ -236,6 +237,7 @@ alloc_send_cmd_transfer(FpDevice *dev,
                         guint16 len)
 {
     //g_print("hello PA: alloc_send_cmd_transfer len=%d \n", len);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(dev);
     int real_len = 0;
     if (ins == PA_CMD_FPSTATE)
@@ -261,12 +263,17 @@ alloc_send_cmd_transfer(FpDevice *dev,
         memcpy(transfer->buffer + PA_HEADER_LEN + PA_LEN_LEN + PA_INNER_HEADER_LEN, data, len);
     if (ssm != NULL)
         transfer->ssm = ssm;
-    //if(ins!=PA_CMD_FPSTATE)
-        p_print(transfer->buffer,real_len);
+
+    p_print(transfer->buffer, real_len);
+    g_print("hello PA: padev->op_state %x ins %x\n", padev->opt_stage, ins);
     if (ins == PA_CMD_FPSTATE)
-        fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
+        if (padev->opt_stage == PA_CMD_ENROLL)
+            fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
+        else
+            fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, verify_iterate_cmd_cb, NULL);
     else
         fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
+
 }
 
 static void
@@ -294,14 +301,14 @@ read_cb(FpiUsbTransfer *transfer, FpDevice *device,
         gpointer user_data, GError *error)
 {
     struct prime_data *udata = user_data;
-    
+
     if (transfer->actual_length < PA_HEADER_LEN + PA_LEN_LEN + PA_SW_LEN)
     {
         g_print("hello PA: read_cb len = %ld\n", transfer->actual_length);
         g_print("hello PA: error %s\n", error->message);
         return;
     }
-    p_print(transfer->buffer,transfer->actual_length);
+    p_print(transfer->buffer, transfer->actual_length);
     handle_response(device, transfer, udata);
 
     return;
@@ -327,6 +334,8 @@ static int get_sw(unsigned char *data, size_t data_len)
         return PA_FPM_REFDATA;
     if (data[7 + len - 2] == 0x6a && data[8 + len - 2] == 0x86)
         return PA_P1P2;
+    if (data[7 + len - 2] == 0x6a && data[8 + len - 2] == 0x84)
+        return PA_NOSPACE;
 
     g_print("PA: SW error %x %x\n", data[7 + len - 2], data[8 + len - 2]);
     return PA_ERROR;
@@ -420,12 +429,13 @@ enroll(FpDevice *dev)
 {
     g_print("hello PA: enroll\n");
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
-    memset(g_list.finger_map,0xff,PA_MAX_FINGER_COUNT);
-    memset(original.finger_map,0xff,PA_MAX_FINGER_COUNT);
-    g_list.total_number = 0;
-    original.total_number = 0;
-    g_list.modified_by = 0;
-    original.modified_by = 0;
+    padev->opt_stage = PA_CMD_ENROLL;
+    memset(padev->g_list.finger_map, 0xff, PA_MAX_FINGER_COUNT);
+    memset(padev->original.finger_map, 0xff, PA_MAX_FINGER_COUNT);
+    padev->g_list.total_number = 0;
+    padev->original.total_number = 0;
+    padev->g_list.modified_by = 0;
+    padev->original.modified_by = 0;
 
     /* do_init state machine first */
     FpiSsm *ssm = fpi_ssm_new(dev, enroll_start_pa_run_state,
@@ -438,6 +448,7 @@ enroll(FpDevice *dev)
 static void
 enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     g_print("hello PA: enroll_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
     switch (fpi_ssm_get_cur_state(ssm))
     {
@@ -447,7 +458,7 @@ enroll_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
         break;
     case ENROLL_LIST_BEFORE_GET:
         g_print("hello PA: ENROLL_LIST_BEFORE_GET\n");
-        g_list.modified_by = ENROLL_LIST_BEFORE_GET;
+        padev->g_list.modified_by = ENROLL_LIST_BEFORE_GET;
         alloc_get_cmd_transfer(dev, handle_get_list, ssm);
         break;
     case ENROLL_CMD_SEND:
@@ -475,9 +486,19 @@ static void handle_get_enroll(FpDevice *dev,
     int result = get_sw(data, data_len);
     if (result == PA_OK)
         fpi_ssm_next_state(ssm);
+    else if (result == PA_NOSPACE)
+    {
+        fpi_device_enroll_complete(dev,
+                                   NULL,
+                                   fpi_device_error_new(FP_DEVICE_ERROR_DATA_FULL));
+    }
     else
     {
-        //TODO: error handle
+        fpi_device_enroll_complete(dev,
+                                   NULL,
+                                   fpi_device_error_new_msg(FP_DEVICE_ERROR_GENERAL,
+                                                            "Enrollment failed (%d)",
+                                                            result));
     }
 }
 
@@ -528,7 +549,7 @@ static void handle_enroll_iterate_cb(FpDevice *dev,
     {
         //TODO: error handle
     }
-    if(padev->enroll_stage<16)
+    if (padev->enroll_stage < 16)
         enroll_iterate(dev);
 }
 
@@ -542,37 +563,37 @@ enroll_started(FpiSsm *ssm, FpDevice *dev, GError *error)
 static void
 do_enroll_done(FpDevice *dev)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     //backup original list
-    original.total_number = g_list.total_number;
-    memcpy(original.finger_map, g_list.finger_map,PA_MAX_FINGER_COUNT);
-    original.modified_by = g_list.modified_by;
+    padev->original.total_number = padev->g_list.total_number;
+    memcpy(padev->original.finger_map, padev->g_list.finger_map, PA_MAX_FINGER_COUNT);
+    padev->original.modified_by = padev->g_list.modified_by;
     //start ssm to get list
     FpiSsm *ssm = fpi_ssm_new(dev, enroll_finish_pa_run_state,
                               ENROLL_DONE);
 
     fpi_ssm_start(ssm, enroll_save);
-
-    
 }
 static void
 enroll_save(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
     FpPrint *print = NULL;
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     fpi_device_get_enroll_data(dev, &print);
     int dev_new_index = -1;
     g_print("hello PA:enroll done finger %d \n", fp_print_get_finger(print));
     //TODO compare two lists to device which is new dev_index and
-    if(g_list.total_number- original.total_number!=1)//not enroll 1 finger
+    if (padev->g_list.total_number - padev->original.total_number != 1) //not enroll 1 finger
         return;
-    for(int i=0; i<PA_MAX_FINGER_COUNT; i++)
+    for (int i = 0; i < PA_MAX_FINGER_COUNT; i++)
     {
-        if(g_list.finger_map[i]!=original.finger_map[i])
+        if (padev->g_list.finger_map[i] != padev->original.finger_map[i])
         {
-            dev_new_index = g_list.finger_map[i];
+            dev_new_index = padev->g_list.finger_map[i];
             break;
         }
-            
     }
+    padev->opt_stage = 0;
     gen_finger(dev, dev_new_index, print);
     pa_data_save(print, fp_print_get_finger(print));
     fpi_device_enroll_complete(dev, print, error);
@@ -581,6 +602,7 @@ enroll_save(FpiSsm *ssm, FpDevice *dev, GError *error)
 static void
 enroll_finish_pa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     g_print("hello PA: enroll_finish_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
     switch (fpi_ssm_get_cur_state(ssm))
     {
@@ -590,7 +612,7 @@ enroll_finish_pa_run_state(FpiSsm *ssm, FpDevice *dev)
         break;
     case ENROLL_LIST_AFTER_GET:
         g_print("hello PA: ENROLL_LIST_AFTER_GET\n");
-        g_list.modified_by = ENROLL_LIST_AFTER_GET+0x20;
+        padev->g_list.modified_by = ENROLL_LIST_AFTER_GET + 0x20;
         alloc_get_cmd_transfer(dev, handle_get_list, ssm);
         break;
     default:
@@ -629,6 +651,9 @@ static void
 verify(FpDevice *dev)
 {
     g_print("hello PA: verify\n");
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    padev->opt_stage = PA_CMD_VERIFY;
+    memset(padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
     FpiSsm *ssm = fpi_ssm_new(dev, verify_start_pa_run_state, VERIFY_FINAL);
     fpi_ssm_start(ssm, verify_started);
 }
@@ -640,17 +665,12 @@ verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
     switch (fpi_ssm_get_cur_state(ssm))
     {
     case VERIFY_CMD_SEND:
-        g_print("hello PA: VERIFY_INIT\n");
-        fpi_ssm_next_state(ssm);
+        g_print("hello PA: VERIFY_CMD_SEND\n");
+        alloc_send_cmd_transfer(dev, ssm, PA_CMD_VERIFY, 0, 0, str_verify, strlen(str_verify));
         break;
     case VERIFY_CMD_GET:
-        g_print("hello PA: VERIFY_INIT\n");
-        fpi_ssm_next_state(ssm);
-        break;
-    case VERIFY_UPDATE:
-        g_print("hello PA: VERIFY_UPDATE\n");
-        verify_iterate(dev);
-        fpi_ssm_next_state(ssm);
+        g_print("hello PA: VERIFY_CMD_GET\n");
+        alloc_get_cmd_transfer(dev, handle_get_list, ssm);
         break;
     default:
         g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
@@ -658,25 +678,173 @@ verify_start_pa_run_state(FpiSsm *ssm, FpDevice *dev)
     }
 }
 static void
+handle_get_verify(FpDevice *dev,
+                  unsigned char *data,
+                  size_t data_len,
+                  void *user_data,
+                  GError *error)
+{
+    FpiSsm *ssm = user_data;
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    g_print("hello PA:handle_get_enroll %ld\n", data_len);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK)
+        fpi_ssm_next_state(ssm);
+    else if (result == PA_FPM_REFDATA)
+    { //no finger inside
+        padev->opt_stage = 0;
+        fpi_device_verify_report(dev, FPI_MATCH_FAIL, NULL, NULL);
+        fpi_device_verify_complete(dev, error);
+    }
+    else
+    {
+        padev->opt_stage = 0;
+        fpi_device_verify_report(dev, FPI_MATCH_ERROR, NULL, NULL);
+        fpi_device_verify_complete(dev, error);
+    }
+}
+
+static void
 verify_iterate(FpDevice *dev)
 {
     g_print("hello PA: verify_iterate\n");
+    alloc_send_cmd_transfer(dev, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
 }
 
 static void
 verify_started(FpiSsm *ssm, FpDevice *dev, GError *error)
 {
-    GError *err = NULL;
-    fpi_device_verify_report(dev, FPI_MATCH_SUCCESS, NULL, NULL);
-    fpi_device_verify_complete(dev, err);
+    g_print("hello PA: verify_started\n");
+    verify_iterate(dev);
+}
+static void
+verify_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *device,
+                      gpointer user_data, GError *error)
+{
+    g_print("hello PA: verify_iterate_cmd_cb\n");
+    alloc_get_cmd_transfer(device, handle_verify_iterate_cb, NULL);
+}
+
+static void
+handle_verify_iterate_cb(FpDevice *dev,
+                         unsigned char *data,
+                         size_t data_len,
+                         void *user_data,
+                         GError *error)
+{
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    unsigned char code = 0;
+    //g_print("hello PA: handle_enroll_iterate_cb %d \n", padev->enroll_stage);
+    int result = get_sw(data, data_len);
+    if (result == PA_OK)
+    {
+        get_data(data, data_len, &code);
+        if (code == PA_FPM_VERIFY_OK)
+        {
+            g_print("hello PA: PA_FPM_VERIFY_OK \n");
+            //call finish
+            do_verify_done(dev);
+            return;
+        }
+        if (code == PA_FPM_VERIFY_FAIL)
+        {
+            padev->opt_stage = 0;
+            fpi_device_verify_report(dev, FPI_MATCH_FAIL, NULL, NULL);
+            fpi_device_verify_complete(dev, error);
+            return;
+        }
+    }
+    else
+    {
+        padev->opt_stage = 0;
+        fpi_device_verify_report(dev, FPI_MATCH_ERROR, NULL, NULL);
+        fpi_device_verify_complete(dev, error);
+    }
+
+    verify_iterate(dev);
+}
+
+static void
+do_verify_done(FpDevice *dev)
+{
+    FpiSsm *ssm = fpi_ssm_new(dev, verify_finish_pa_run_state, VERIFY_FINAL);
+    fpi_ssm_start(ssm, verify_report);
+}
+
+static void verify_finish_pa_run_state(FpiSsm *ssm, FpDevice *dev)
+{
+    g_print("hello PA: verify_start_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    switch (fpi_ssm_get_cur_state(ssm))
+    {
+    case VERIFY_GET_ID_SEND:
+        g_print("hello PA: VERIFY_GET_ID_SEND\n");
+        alloc_send_cmd_transfer(dev, ssm, PA_CMD_VID, 0, 0, NULL, 0);
+        break;
+    case VERIFY_GET_ID_GET:
+        g_print("hello PA: VERIFY_ID_CMD_SEND\n");
+        alloc_get_cmd_transfer(dev, handle_get_vid, ssm);
+        break;
+    default:
+        g_print("hello PA: enroll_start_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        break;
+    }
+}
+
+static void
+handle_get_vid(FpDevice *dev,
+               unsigned char *data,
+               size_t data_len,
+               void *user_data,
+               GError *error)
+{
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    FpiSsm *ssm = user_data;
+    unsigned char index[PA_MAX_FINGER_COUNT] = {0};
+    int result = get_sw(data, data_len);
+    if (result == PA_OK)
+    {
+        get_data(data, data_len, index);
+        memcpy(padev->matched_index, index, PA_MAX_FINGER_COUNT);
+        fpi_ssm_next_state(ssm);
+    }
+    else
+    {
+        padev->opt_stage = 0;
+        fpi_device_verify_report(dev, FPI_MATCH_ERROR, NULL, NULL);
+        fpi_device_verify_complete(dev, error);
+    }
+}
+
+static void
+verify_report(FpiSsm *ssm, FpDevice *dev, GError *error)
+{
+    g_print("hello PA: verify_report\n");
+    FpPrint *print = NULL;
+    fpi_device_get_verify_data(dev, &print);
+    FpPrint *enroll_print = pa_data_load(dev, fp_print_get_finger(print));
+    int dev_index = get_dev_index(dev, enroll_print);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    for (int i = 0; i < PA_MAX_FINGER_COUNT; i++)
+    {
+        if (dev_index == padev->matched_index[i])
+        {
+            padev->opt_stage = 0;
+            fpi_device_verify_report(dev, FPI_MATCH_SUCCESS, NULL, NULL);
+            fpi_device_verify_complete(dev, error);
+            return;
+        }
+    }
+    padev->opt_stage = 0;
+    fpi_device_verify_report(dev, FPI_MATCH_FAIL, NULL, NULL);
+    fpi_device_verify_complete(dev, error);
 }
 /* -----------------------------List group -----------------------------------*/
 
 static void
 list(FpDevice *device)
-{  
-    FpiSsm *ssm = fpi_ssm_new(device, list_pa_run_state,LIST_DONE);
-    fpi_ssm_start(ssm, list_done);  
+{
+    FpiSsm *ssm = fpi_ssm_new(device, list_pa_run_state, LIST_DONE);
+    fpi_ssm_start(ssm, list_done);
 }
 static void
 list_done(FpiSsm *ssm, FpDevice *device, GError *error)
@@ -707,24 +875,24 @@ list_done(FpiSsm *ssm, FpDevice *device, GError *error)
 static void
 list_pa_run_state(FpiSsm *ssm, FpDevice *dev)
 {
-    g_print("hello PA: enroll_finish_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
+    g_print("hello PA: list_pa_run_state %d\n", fpi_ssm_get_cur_state(ssm));
     switch (fpi_ssm_get_cur_state(ssm))
     {
     case LIST_SEND:
-        g_print("hello PA: ENROLL_LIST_AFTER_SEND\n");
+        g_print("hello PA: LIST_SEND\n");
         alloc_send_cmd_transfer(dev, ssm, PA_CMD_LIST, 0x80, 0, NULL, 0);
         break;
     case LIST_GET:
-        g_print("hello PA: ENROLL_LIST_AFTER_GET\n");
-        g_list.modified_by = LIST_GET+0x40;
+        g_print("hello PA: LIST_GET\n");
+        padev->g_list.modified_by = LIST_GET + 0x40;
         alloc_get_cmd_transfer(dev, handle_get_list, ssm);
         break;
     default:
-        g_print("hello PA: enroll_finish_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
+        g_print("hello PA: list_pa_run_state DEFAULT %d\n", fpi_ssm_get_cur_state(ssm));
         break;
     }
 }
-
 
 static void handle_get_list(FpDevice *dev,
                             unsigned char *data,
@@ -733,9 +901,9 @@ static void handle_get_list(FpDevice *dev,
                             GError *error)
 {
     FpiSsm *ssm = user_data;
-
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(dev);
     g_print("hello PA:handle_get_list %ld\n", data_len);
-    p_print(data,data_len);
+    p_print(data, data_len);
     int result = get_sw(data, data_len);
     if (result != PA_OK)
     {
@@ -743,15 +911,15 @@ static void handle_get_list(FpDevice *dev,
     }
     else
     {
-        g_list.total_number = get_data(data, data_len, g_list.finger_map);
-        g_list.modified_by = g_list.modified_by + 0x80;
-        g_print("hello PA: handle_get_list number %d  by %d\n", g_list.total_number, g_list.modified_by);
+        padev->g_list.total_number = get_data(data, data_len, padev->g_list.finger_map);
+        padev->g_list.modified_by = padev->g_list.modified_by + 0x80;
+        g_print("hello PA: handle_get_list number %d  by %d\n", padev->g_list.total_number, padev->g_list.modified_by);
         g_print("hello PA: g_list ");
-        for(int i=0;i<PA_MAX_FINGER_COUNT; i++)
+        for (int i = 0; i < PA_MAX_FINGER_COUNT; i++)
         {
-                g_print("%d ", g_list.finger_map[i]);
+            g_print("%d ", padev->g_list.finger_map[i]);
         }
-         g_print("\n");
+        g_print("\n");
         fpi_ssm_next_state(ssm);
     }
 }
@@ -776,6 +944,8 @@ delete_cmd_state(FpiSsm *ssm, FpDevice *dev)
         int dev_index = get_dev_index(dev, print);
         g_print("hello PA: delete_cmd_state DELETE_SEND dev_index %d \n", dev_index);
         alloc_send_cmd_transfer(dev, ssm, PA_CMD_DELETE, dev_index + 1, 0, (unsigned char *)str_delete, strlen(str_delete));
+        //for FK, close upper and open lower to delete all exists
+        //alloc_send_cmd_transfer(dev, ssm, PA_CMD_DELETE, 0, 0, (unsigned char *)str_delete, strlen(str_delete));
         break;
     case DELETE_GET:
         g_print("hello PA: DELETE_GET\n");
@@ -814,19 +984,19 @@ delete_done(FpiSsm *ssm, FpDevice *dev, GError *error)
 }
 
 static void
-cancel (FpDevice *dev)
+cancel(FpDevice *dev)
 {
-  //FpiDevicePa_Primex *self = FPI_DEVICE_PA_PRIME(device);
+    //FpiDevicePa_Primex *self = FPI_DEVICE_PA_PRIME(device);
 
-//   /* We just send out a cancel command and hope for the best. */
-//   synaptics_sensor_cmd (self, -1, BMKT_CMD_CANCEL_OP, NULL, 0, NULL);
+    //   /* We just send out a cancel command and hope for the best. */
+    //   synaptics_sensor_cmd (self, -1, BMKT_CMD_CANCEL_OP, NULL, 0, NULL);
 
-  /* Cancel any current interrupt transfer (resulting us to go into
+    /* Cancel any current interrupt transfer (resulting us to go into
    * response reading mode again); then create a new cancellable
    * for the next transfers. */
-//   g_cancellable_cancel (self->interrupt_cancellable);
-//   g_clear_object (&self->interrupt_cancellable);
-//   self->interrupt_cancellable = g_cancellable_new ();
+    //   g_cancellable_cancel (self->interrupt_cancellable);
+    //   g_clear_object (&self->interrupt_cancellable);
+    //   self->interrupt_cancellable = g_cancellable_new ();
 }
 
 //main entry

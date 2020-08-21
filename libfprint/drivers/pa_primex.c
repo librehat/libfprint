@@ -41,7 +41,7 @@ struct _FpiDevicePa_Primex
     FpDevice parent;
     gint enroll_stage;
     GPtrArray *list_result;
-    unsigned char matched_index[PA_MAX_FINGER_COUNT];
+    guchar matched_index[PA_MAX_FINGER_COUNT];
     gint opt_stage;
     pa_finger_list_t g_list;   //only use to figure enroll change out
     pa_finger_list_t original; //only use to figure enroll change out
@@ -51,10 +51,10 @@ struct _FpiDevicePa_Primex
 G_DECLARE_FINAL_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FPI, DEVICE_PA_PRIME, FpDevice);
 G_DEFINE_TYPE(FpiDevicePa_Primex, fpi_device_pa_primex, FP_TYPE_DEVICE);
 
-static void p_print(unsigned char *buf, int len)
+static void p_print(guchar *buf, gint len)
 {
     g_print("buf len = %d \n", len);
-    for (int i = 0; i < len; i++)
+    for (gint i = 0; i < len; i++)
     {
         g_print("0x%x ", buf[i]);
     }
@@ -64,15 +64,14 @@ static void p_print(unsigned char *buf, int len)
 static void
 fpi_device_pa_primex_init(FpiDevicePa_Primex *self)
 {
-    g_print("PixelAut: fpi_device_pa_primex_init\n");
 }
 /*----------------------------Storage group------------------------------------*/
-static char *
+static gchar *
 get_pa_data_descriptor(FpPrint *print, FpDevice *self, FpFinger finger)
 {
-    const char *driver;
-    const char *dev_id;
-    //const char *username;
+    const gchar *driver;
+    const gchar *dev_id;
+    //const gchar *username;
 
     if (print)
     {
@@ -170,7 +169,7 @@ pa_data_load(FpDevice *self, FpFinger finger)
     return NULL;
 }
 
-int pa_data_save(FpPrint *print, FpFinger finger)
+gint pa_data_save(FpPrint *print, FpFinger finger)
 {
     g_autofree gchar *descr = get_pa_data_descriptor(print, NULL, finger);
 
@@ -179,7 +178,7 @@ int pa_data_save(FpPrint *print, FpFinger finger)
     g_autofree guchar *data = NULL;
     GVariant *val;
     gsize size;
-    int res;
+    gint res;
 
     dict = _load_data();
 
@@ -197,7 +196,7 @@ int pa_data_save(FpPrint *print, FpFinger finger)
     return res;
 }
 
-int pa_data_del(FpDevice *self, FpFinger finger)
+gint pa_data_del(FpDevice *self, FpFinger finger)
 {
     g_autofree gchar *descr = get_pa_data_descriptor(NULL, self, finger);
 
@@ -218,23 +217,25 @@ int pa_data_del(FpDevice *self, FpFinger finger)
     return PA_ERROR;
 }
 
-int get_dev_index(FpDevice *self, FpPrint *print)
+gint get_dev_index(FpDevice *self, FpPrint *print)
 {
     FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
     const gchar *dev_str = fp_print_get_description(enroll_print);
     fp_info("get_dev_index %s \n", dev_str);
-    int dev_index = dev_str[6] - 0x30; // /dev//[x]
+    gint dev_index = dev_str[6] - 0x30; // /dev//[x]
     return dev_index;
 }
 
 static void
-gen_finger(int dev_index, FpPrint *print)
+gen_finger(gint dev_index, FpPrint *print)
 {
     GVariant *data = NULL;
     GVariant *uid = NULL;
+    g_autoptr(GDate) date = NULL;
     guint finger;
     g_autofree gchar *user_id = fpi_print_generate_user_id(print);
     gssize user_id_len = strlen(user_id);
+
     /*dummmy data must be exist*/
     finger = fp_print_get_finger(print); /* this one doesnt count*/
     uid = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
@@ -245,11 +246,13 @@ gen_finger(int dev_index, FpPrint *print)
     fpi_print_set_type(print, FPI_PRINT_RAW);
     fpi_print_set_device_stored(print, TRUE);
     g_object_set(print, "fpi-data", data, NULL);
+    date = g_date_new ();
+    fp_print_set_enroll_date(print, date);
+
     /*the followings are useful*/
     fp_print_set_username(print, g_get_user_name());
-    g_print("PixelAut: gen_fginer username %s \n", g_get_user_name());
     g_object_set(print, "description", g_strdup_printf("%s/%d", pa_description, dev_index), NULL);
-    fpi_print_fill_from_user_id(print, user_id);
+    //fpi_print_fill_from_user_id(print, user_id);
 }
 /* -----------------------------USB layer group -----------------------------------*/
 static void
@@ -261,10 +264,9 @@ alloc_send_cmd_transfer(FpDevice *self,
                         const gchar *data,
                         guint16 len)
 {
-    //g_print("PixelAut: alloc_send_cmd_transfer len=%d \n", len);
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(self);
-    int real_len = 0;
+    gint real_len = 0;
     if (ins == PA_CMD_FPSTATE)
     {
         len = 0;
@@ -290,8 +292,8 @@ alloc_send_cmd_transfer(FpDevice *self,
         transfer->ssm = ssm;
 #if PA_DEBUG_USB
     p_print(transfer->buffer, real_len);
+    fp_info("PixelAuth: padev->op_state %x ins %x\n", padev->opt_stage, ins);
 #endif
-    g_print("PixelAut: padev->op_state %x ins %x\n", padev->opt_stage, ins);
     if (ins == PA_CMD_FPSTATE)
         if (padev->opt_stage == PA_CMD_ENROLL)
             fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
@@ -306,7 +308,6 @@ alloc_get_cmd_transfer(FpDevice *self,
                        handle_get_fn callback,
                        void *user_data)
 {
-    //g_print("PixelAut: alloc_get_cmd_transfer\n");
     FpiUsbTransfer *transfer = fpi_usb_transfer_new(self);
     struct prime_data *udata = g_new0(struct prime_data, 1);
 
@@ -349,9 +350,9 @@ handle_response(FpDevice *self, FpiUsbTransfer *transfer, struct prime_data *uda
     udata->callback(self, buf, len, udata->user_data, NULL);
 }
 
-static int get_sw(unsigned char *data, size_t data_len)
+static gint get_sw(guchar *data, gssize data_len)
 {
-    int len = data[6];
+    gint len = data[6];
     if (data[7 + len - 2] == 0x90 && data[8 + len - 2] == 0)
         return PA_OK;
     if (data[7 + len - 2] == 0x6f && data[8 + len - 2] == 3)
@@ -363,13 +364,13 @@ static int get_sw(unsigned char *data, size_t data_len)
     if (data[7 + len - 2] == 0x6a && data[8 + len - 2] == 0x84)
         return PA_NOSPACE;
 
-    g_print("PA: SW error %x %x\n", data[7 + len - 2], data[8 + len - 2]);
+    fp_warn("PA: SW error %x %x\n", data[7 + len - 2], data[8 + len - 2]);
     return PA_ERROR;
 }
 
-static int get_data(unsigned char *data, size_t data_len, unsigned char *buf)
+static gint get_data(guchar *data, gssize data_len, guchar *buf)
 {
-    int len = data[6];
+    gint len = data[6];
     if (len == PA_SW_LEN)
         return PA_OK;
     if (len > PA_SW_LEN)
@@ -380,7 +381,6 @@ static int get_data(unsigned char *data, size_t data_len, unsigned char *buf)
 static void
 dev_init(FpDevice *self)
 {
-    g_print("Pixelauth: dev_init\n");
     FpiSsm *ssm;
     GError *error = NULL;
 
@@ -417,7 +417,7 @@ static void handle_get_abort(FpDevice *self,
                              GError *error)
 {
     FpiSsm *ssm = user_data;
-    int result = get_sw(data, data_len);
+    gint result = get_sw(data, data_len);
     if (result == PA_OK || result == PA_FPM_CONDITION)
         fpi_ssm_next_state(ssm);
     else
@@ -430,13 +430,13 @@ static void abort_done(FpiSsm *ssm, FpDevice *self, GError *error)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     fp_info("PixelAuth:cancel sent!\n");
-    if(padev->opt_stage==PA_CMD_ENROLL)
+    if (padev->opt_stage == PA_CMD_ENROLL)
     {
-        enroll_deinit(self,NULL,g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED, "Cancelled"));
+        enroll_deinit(self, NULL, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_CANCELLED, "Cancelled"));
     }
-    else if(padev->opt_stage==PA_CMD_VERIFY)
+    else if (padev->opt_stage == PA_CMD_VERIFY)
     {
-        verify_deinit(self,NULL,FPI_MATCH_FAIL,g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED, "Cancelled"));
+        verify_deinit(self, NULL, FPI_MATCH_FAIL, g_error_new_literal(G_IO_ERROR, G_IO_ERROR_CANCELLED, "Cancelled"));
     }
 }
 
@@ -449,8 +449,8 @@ static void
 dev_exit(FpDevice *self)
 {
     GError *error = NULL;
-    //TODO clear object
-    //g_clear_object (&self->interrupt_cancellable);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    g_clear_pointer (&padev->list_result, g_ptr_array_unref);
     G_DEBUG_HERE();
     g_usb_device_release_interface(fpi_device_get_usb_device(self), 0, 0, &error);
     fpi_device_close_complete(self, error);
@@ -472,6 +472,17 @@ enroll_init(FpDevice *self)
 static void
 enroll(FpDevice *self)
 {
+    FpPrint *print = NULL;
+    fpi_device_get_enroll_data(self, &print);
+    FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
+    if(enroll_print)//refuse to enroll again if exsits
+    {
+         enroll_deinit(self,
+                      NULL,
+                      fpi_device_error_new(FP_DEVICE_ERROR_DATA_INVALID));//no useful error code
+        return;
+    }
+
     enroll_init(self);
     FpiSsm *ssm = fpi_ssm_new(self, enroll_start_run_state, ENROLL_UPDATE);
     fpi_ssm_start(ssm, enroll_started);
@@ -506,8 +517,7 @@ static void handle_get_enroll(FpDevice *self,
                               GError *error)
 {
     FpiSsm *ssm = user_data;
-    g_print("PixelAut:handle_get_enroll %ld\n", data_len);
-    int result = get_sw(data, data_len);
+    gint result = get_sw(data, data_len);
     if (result == PA_OK)
         fpi_ssm_next_state(ssm);
     else if (result == PA_NOSPACE)
@@ -553,12 +563,25 @@ static void handle_enroll_iterate_cb(FpDevice *self,
                                      GError *error)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    unsigned char code = 0;
-    //g_print("PixelAut: handle_enroll_iterate_cb %d \n", padev->enroll_stage);
-    int result = get_sw(data, data_len);
+    guchar code = 0;
+    gint result = get_sw(data, data_len);
     if (result == PA_OK)
     {
         get_data(data, data_len, &code);
+        if (code == PA_FPM_ENROLL_REDUNDANT)
+        {
+            fpi_device_enroll_progress(self,
+                                       padev->enroll_stage,
+                                       NULL,
+                                       fpi_device_retry_new(FP_DEVICE_RETRY_GENERAL));
+        }
+        if (code == PA_FPM_ENROLL_NOTFULLFINGER)
+        {
+            fpi_device_enroll_progress(self,
+                                       padev->enroll_stage,
+                                       NULL,
+                                       fpi_device_retry_new(FP_DEVICE_RETRY_CENTER_FINGER));
+        }
         if (code == PA_FPM_ENROLL_GOOD)
         {
             padev->enroll_stage += 1;
@@ -621,11 +644,11 @@ enroll_save(FpiSsm *ssm, FpDevice *self, GError *error)
     FpPrint *print = NULL;
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     fpi_device_get_enroll_data(self, &print);
-    int dev_new_index = -1;
-    g_print("PixelAut:enroll done finger %d \n", fp_print_get_finger(print));
+    gint dev_new_index = -1;
+    fp_info("PixelAut:enroll done finger %d \n", fp_print_get_finger(print));
     if (padev->g_list.total_number - padev->original.total_number != 1) //not enroll 1 finger
         return;
-    for (int i = 0; i < PA_MAX_FINGER_COUNT; i++)
+    for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
     {
         if (padev->g_list.finger_map[i] != padev->original.finger_map[i])
         {
@@ -687,7 +710,7 @@ verify_deinit(FpDevice *self, FpPrint *print, FpiMatchResult result, GError *err
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     padev->opt_stage = 0;
-    fpi_device_verify_report(self, result, NULL, NULL);
+    fpi_device_verify_report(self, result, print, NULL);
     fpi_device_verify_complete(self, error);
 }
 
@@ -698,7 +721,7 @@ static void handle_get_verify(FpDevice *self,
                               GError *error)
 {
     FpiSsm *ssm = user_data;
-    int result = get_sw(data, data_len);
+    gint result = get_sw(data, data_len);
     if (result == PA_OK)
         fpi_ssm_next_state(ssm);
     else if (result == PA_FPM_REFDATA)
@@ -743,8 +766,8 @@ handle_verify_iterate_cb(FpDevice *self,
                          void *user_data,
                          GError *error)
 {
-    unsigned char code = 0;
-    int result = get_sw(data, data_len);
+    guchar code = 0;
+    gint result = get_sw(data, data_len);
     if (result == PA_OK)
     {
         get_data(data, data_len, &code);
@@ -798,8 +821,8 @@ static void handle_get_vid(FpDevice *self,
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     FpiSsm *ssm = user_data;
-    unsigned char index[PA_MAX_FINGER_COUNT] = {0};
-    int result = get_sw(data, data_len);
+    guchar index[PA_MAX_FINGER_COUNT] = {0};
+    gint result = get_sw(data, data_len);
     if (result == PA_OK)
     {
         get_data(data, data_len, index);
@@ -818,9 +841,9 @@ verify_report(FpiSsm *ssm, FpDevice *self, GError *error)
     FpPrint *print = NULL;
     fpi_device_get_verify_data(self, &print);
     FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
-    int dev_index = get_dev_index(self, enroll_print);
+    gint dev_index = get_dev_index(self, enroll_print);
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    for (int i = 0; i < PA_MAX_FINGER_COUNT; i++)
+    for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
     {
         if (dev_index == padev->matched_index[i])
         {
@@ -843,7 +866,7 @@ list_done(FpiSsm *ssm, FpDevice *self, GError *error)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     padev->list_result = g_ptr_array_new_with_free_func(g_object_unref);
-    for (int i = 1; i < PA_MAX_FINGER_COUNT + 1; i++)
+    for (gint i = 1; i < PA_MAX_FINGER_COUNT + 1; i++)
     {
         FpPrint *back = pa_data_load(self, i);
         if (!back)
@@ -887,7 +910,7 @@ static void handle_get_list(FpDevice *self,
 {
     FpiSsm *ssm = user_data;
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    int result = get_sw(data, data_len);
+    gint result = get_sw(data, data_len);
     if (result != PA_OK)
     {
         //TODO: error handle
@@ -915,10 +938,10 @@ delete_cmd_state(FpiSsm *ssm, FpDevice *self)
     {
     case DELETE_SEND:
         fpi_device_get_delete_data(self, &print);
-        int dev_index = get_dev_index(self, print);
+        gint dev_index = get_dev_index(self, print);
         alloc_send_cmd_transfer(self, ssm, PA_CMD_DELETE, dev_index + 1, 0, str_delete, strlen(str_delete));
         //for FK, close upper and open lower to delete all exists
-        //alloc_send_cmd_transfer(dev, ssm, PA_CMD_DELETE, 0, 0, str_delete, strlen(str_delete));
+        //alloc_send_cmd_transfer(self, ssm, PA_CMD_DELETE, 0, 0, str_delete, strlen(str_delete));
         break;
     case DELETE_GET:
         alloc_get_cmd_transfer(self, handle_get_delete, ssm);
@@ -935,7 +958,7 @@ static void handle_get_delete(FpDevice *self,
                               GError *error)
 {
     FpiSsm *ssm = user_data;
-    int result = get_sw(data, data_len);
+    gint result = get_sw(data, data_len);
     if (result == PA_OK || result == PA_FPM_REFDATA)
         fpi_ssm_next_state(ssm);
     else
@@ -966,16 +989,12 @@ static void
 fpi_device_pa_primex_class_init(FpiDevicePa_PrimexClass *klass)
 {
     FpDeviceClass *dev_class = FP_DEVICE_CLASS(klass);
-    g_print("PixelAut: fpi_device_pa_primex_class_init\n");
-
     dev_class->id = "pa_primex";
     dev_class->full_name = "Pixelauth PrimeX";
     dev_class->type = FP_DEVICE_TYPE_USB;
     dev_class->id_table = id_table;
     dev_class->scan_type = FP_SCAN_TYPE_PRESS;
-
     dev_class->nr_enroll_stages = 16;
-
     dev_class->open = dev_init;
     dev_class->close = dev_exit;
     dev_class->verify = verify;

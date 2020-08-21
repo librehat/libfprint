@@ -40,7 +40,7 @@
 #define PA_IN (2 | FPI_USB_ENDPOINT_IN)
 #define PA_OUT (1 | FPI_USB_ENDPOINT_OUT)
 
-#define PA_DEBUG_USB 1
+#define PA_DEBUG_USB 0
 
 const guchar pa_header[] = {0x50, 0x58, 0x41, 0x54, 0xc0};
 const gchar *str_enroll = "u2f enroll fp";
@@ -127,7 +127,7 @@ typedef struct
 typedef struct pa_finger_list
 {
     gint total_number; /**< Total query response messages */
-    unsigned char finger_map[PA_MAX_FINGER_COUNT];
+    guchar finger_map[PA_MAX_FINGER_COUNT];
 } pa_finger_list_t;
 
 typedef void (*handle_get_fn)(FpDevice *self,
@@ -147,14 +147,14 @@ struct prime_data
 const gchar *pa_description = "/dev/";
 
 /*Storage group*/
-static char *get_pa_data_descriptor(FpPrint *print, FpDevice *self, FpFinger finger);
+static gchar *get_pa_data_descriptor(FpPrint *print, FpDevice *self, FpFinger finger);
 static GVariantDict *_load_data(void);
-static int _save_data(GVariant *data);
+static gint _save_data(GVariant *data);
 FpPrint *pa_data_load(FpDevice *self, FpFinger finger);
-int pa_data_save(FpPrint *print, FpFinger finger);
-int pa_data_del(FpDevice *self, FpFinger finger);
-int get_dev_index(FpDevice *self, FpPrint *print);
-static void gen_finger(int dev_index, FpPrint *print);
+gint pa_data_save(FpPrint *print, FpFinger finger);
+gint pa_data_del(FpDevice *self, FpFinger finger);
+gint get_dev_index(FpDevice *self, FpPrint *print);
+static void gen_finger(gint dev_index, FpPrint *print);
 
 /*USB layer group*/
 static void
@@ -168,8 +168,8 @@ alloc_send_cmd_transfer(FpDevice *self,
 static void alloc_get_cmd_transfer(FpDevice *self, handle_get_fn callback, void *user_data);
 static void read_cb(FpiUsbTransfer *transfer, FpDevice *self, gpointer user_data, GError *error);
 static void handle_response(FpDevice *self, FpiUsbTransfer *transfer, struct prime_data *udata);
-static int get_sw(unsigned char *data, size_t data_len);
-static int get_data(unsigned char *data, size_t data_len, unsigned char *buf);
+static gint get_sw(guchar *data, gssize data_len);
+static gint get_data(guchar *data, gssize data_len, guchar *buf);
 
 /* Init group*/
 static void dev_init(FpDevice *self);

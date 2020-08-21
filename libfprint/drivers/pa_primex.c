@@ -685,7 +685,7 @@ verify(FpDevice *self)
     padev->opt_stage = PA_CMD_VERIFY;
     padev->is_canceled = FALSE;
     memset(padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
-    FpiSsm *ssm = fpi_ssm_new(self, verify_start_run_state, VERIFY_FINAL);
+    FpiSsm *ssm = fpi_ssm_new(self, verify_start_run_state, VERIFY_UPDATE);
     fpi_ssm_start(ssm, verify_started);
 }
 
@@ -776,11 +776,16 @@ handle_verify_iterate_cb(FpDevice *self,
             do_verify_done(self);
             return;
         }
-        if (code == PA_FPM_VERIFY_FAIL)
+        else if(code==PA_FPM_VERIFY_WAITING)
+        {
+            //nothing to do
+        }
+        else
         {
             verify_deinit(self, NULL, FPI_MATCH_FAIL, NULL);
             return;
         }
+
     }
     else
     {

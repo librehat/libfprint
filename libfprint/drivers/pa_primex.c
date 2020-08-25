@@ -219,7 +219,10 @@ gint pa_data_del(FpDevice *self, FpFinger finger)
 
 gint get_dev_index(FpDevice *self, FpPrint *print)
 {
-    FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
+    FpPrint *enroll_print = NULL;
+    enroll_print = pa_data_load(self, fp_print_get_finger(print));
+    if(enroll_print == NULL)
+        return PA_ERROR;
     const gchar *dev_str = fp_print_get_description(enroll_print);
     fp_info("get_dev_index %s \n", dev_str);
     gint dev_index = dev_str[6] - 0x30; // /dev//[x]
@@ -681,6 +684,13 @@ static void
 verify(FpDevice *self)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    FpPrint *print = NULL;
+    fpi_device_get_verify_data(self, &print);
+    FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
+    gint dev_index = get_dev_index(self, enroll_print);
+    if(dev_index==PA_ERROR)
+        verify_deinit(self, NULL, FPI_MATCH_FAIL, NULL);
+
     padev->is_canceled = FALSE;
     memset(padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
     FpiSsm *ssm = fpi_ssm_new(self, verify_start_run_state, VERIFY_UPDATE);
@@ -846,9 +856,12 @@ verify_report(FpiSsm *ssm, FpDevice *self, GError *error)
 {
     FpPrint *print = NULL;
     fpi_device_get_verify_data(self, &print);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
     gint dev_index = get_dev_index(self, enroll_print);
-    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    if(dev_index==PA_ERROR)
+        verify_deinit(self, NULL, FPI_MATCH_ERROR, NULL);
+    
     for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
     {
         if (dev_index == padev->matched_index[i])

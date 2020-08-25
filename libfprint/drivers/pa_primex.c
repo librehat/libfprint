@@ -246,7 +246,7 @@ gen_finger(gint dev_index, FpPrint *print)
     fpi_print_set_type(print, FPI_PRINT_RAW);
     fpi_print_set_device_stored(print, TRUE);
     g_object_set(print, "fpi-data", data, NULL);
-    date = g_date_new ();
+    date = g_date_new();
     fp_print_set_enroll_date(print, date);
 
     /*the followings are useful*/
@@ -294,11 +294,10 @@ alloc_send_cmd_transfer(FpDevice *self,
     p_print(transfer->buffer, real_len);
     fp_info("PixelAuth: padev->op_state %x ins %x\n", padev->opt_stage, ins);
 #endif
-    if (ins == PA_CMD_FPSTATE)
-        if (padev->opt_stage == PA_CMD_ENROLL)
-            fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
-        else
-            fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, verify_iterate_cmd_cb, NULL);
+    if (ins == PA_CMD_FPSTATE && padev->opt_stage == PA_CMD_ENROLL)
+        fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
+    else if (ins == PA_CMD_FPSTATE && padev->opt_stage == PA_CMD_VERIFY)
+        fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, verify_iterate_cmd_cb, NULL);
     else
         fpi_usb_transfer_submit(transfer, TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
 }
@@ -450,7 +449,7 @@ dev_exit(FpDevice *self)
 {
     GError *error = NULL;
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    g_clear_pointer (&padev->list_result, g_ptr_array_unref);
+    g_clear_pointer(&padev->list_result, g_ptr_array_unref);
     G_DEBUG_HERE();
     g_usb_device_release_interface(fpi_device_get_usb_device(self), 0, 0, &error);
     fpi_device_close_complete(self, error);
@@ -461,7 +460,6 @@ static void
 enroll_init(FpDevice *self)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    padev->opt_stage = PA_CMD_ENROLL;
     memset(padev->g_list.finger_map, 0xff, PA_MAX_FINGER_COUNT);
     memset(padev->original.finger_map, 0xff, PA_MAX_FINGER_COUNT);
     padev->g_list.total_number = 0;
@@ -475,11 +473,11 @@ enroll(FpDevice *self)
     FpPrint *print = NULL;
     fpi_device_get_enroll_data(self, &print);
     FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
-    if(enroll_print)//refuse to enroll again if exsits
+    if (enroll_print) //refuse to enroll again if exsits
     {
-         enroll_deinit(self,
+        enroll_deinit(self,
                       NULL,
-                      fpi_device_error_new(FP_DEVICE_ERROR_DATA_INVALID));//no useful error code
+                      fpi_device_error_new(FP_DEVICE_ERROR_DATA_INVALID)); //no useful error code
         return;
     }
 
@@ -610,13 +608,13 @@ static void handle_enroll_iterate_cb(FpDevice *self,
 static void
 enroll_started(FpiSsm *ssm, FpDevice *self, GError *error)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    padev->opt_stage = PA_CMD_ENROLL;
     enroll_iterate(self);
 }
 static void
 enroll_deinit(FpDevice *self, FpPrint *print, GError *error)
 {
-    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    padev->opt_stage = 0;
     if (error)
     {
         fp_warn("Error enroll deinitializing: %s", error->message);
@@ -631,6 +629,7 @@ static void
 do_enroll_done(FpDevice *self)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    padev->opt_stage = 0;
     //backup original list
     padev->original.total_number = padev->g_list.total_number;
     memcpy(padev->original.finger_map, padev->g_list.finger_map, PA_MAX_FINGER_COUNT);
@@ -682,7 +681,6 @@ static void
 verify(FpDevice *self)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    padev->opt_stage = PA_CMD_VERIFY;
     padev->is_canceled = FALSE;
     memset(padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
     FpiSsm *ssm = fpi_ssm_new(self, verify_start_run_state, VERIFY_UPDATE);
@@ -709,7 +707,7 @@ static void
 verify_deinit(FpDevice *self, FpPrint *print, FpiMatchResult result, GError *error)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    padev->opt_stage = 0;
+    memset(padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
     fpi_device_verify_report(self, result, print, NULL);
     fpi_device_verify_complete(self, error);
 }
@@ -750,6 +748,8 @@ verify_iterate(FpDevice *self)
 static void
 verify_started(FpiSsm *ssm, FpDevice *self, GError *error)
 {
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    padev->opt_stage = PA_CMD_VERIFY;
     verify_iterate(self);
 }
 static void
@@ -776,7 +776,7 @@ handle_verify_iterate_cb(FpDevice *self,
             do_verify_done(self);
             return;
         }
-        else if(code==PA_FPM_VERIFY_WAITING)
+        else if (code == PA_FPM_VERIFY_WAITING)
         {
             //nothing to do
         }
@@ -785,7 +785,6 @@ handle_verify_iterate_cb(FpDevice *self,
             verify_deinit(self, NULL, FPI_MATCH_FAIL, NULL);
             return;
         }
-
     }
     else
     {
@@ -800,6 +799,8 @@ static void
 do_verify_done(FpDevice *self)
 {
     FpiSsm *ssm = fpi_ssm_new(self, verify_finish_run_state, VERIFY_FINAL);
+    FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
+    padev->opt_stage = 0;
     fpi_ssm_start(ssm, verify_report);
 }
 

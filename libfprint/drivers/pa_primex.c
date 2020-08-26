@@ -99,10 +99,13 @@ _load_data(void)
     GVariant *var;
     gchar *contents = NULL;
     gsize length = 0;
-
-    if (!g_file_get_contents(STORAGE_FILE, &contents, &length, NULL))
+    GError *err = NULL;
+    gchar current_dir[256] = { 0 };
+    if (!g_file_get_contents(STORAGE_FILE, &contents, &length, &err))
     {
-        g_warning("Error loading storage, assuming it is empty");
+        getcwd(current_dir, sizeof(current_dir));
+        g_print ("load dir %s\n",current_dir);
+        g_warning("Error loading storage, assuming it is empty, message:%s\n",err->message);
         return g_variant_dict_new(NULL);
     }
 
@@ -123,13 +126,16 @@ _save_data(GVariant *data)
 {
     const gchar *contents = NULL;
     gsize length;
-
+    GError *err = NULL;
+    gchar current_dir[256] = { 0 };
     length = g_variant_get_size(data);
     contents = (gchar *)g_variant_get_data(data);
 
-    if (!g_file_set_contents(STORAGE_FILE, contents, length, NULL))
+    if (!g_file_set_contents(STORAGE_FILE, contents, length, &err))
     {
-        g_warning("Error saving storage,!");
+        g_warning("Error saving storage, message:%s\n!",err->message);
+        getcwd(current_dir, sizeof(current_dir));
+        g_print ("save dir %s\n",current_dir);
         return -1;
     }
 

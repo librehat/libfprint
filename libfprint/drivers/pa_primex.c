@@ -82,7 +82,7 @@ get_pa_data_descriptor(FpPrint *print, FpDevice *self, FpFinger finger)
     {
         driver = fp_device_get_driver(self);
         dev_id = fp_device_get_device_id(self);
-    }
+    } 
     //TODO not sure if we need username for descriptor
     //username = g_get_user_name();
 
@@ -100,11 +100,9 @@ _load_data(void)
     gchar *contents = NULL;
     gsize length = 0;
     GError *err = NULL;
-    gchar current_dir[256] = { 0 };
+
     if (!g_file_get_contents(STORAGE_FILE, &contents, &length, &err))
     {
-        getcwd(current_dir, sizeof(current_dir));
-        g_print ("load dir %s\n",current_dir);
         g_warning("Error loading storage, assuming it is empty, message:%s\n",err->message);
         return g_variant_dict_new(NULL);
     }
@@ -127,15 +125,13 @@ _save_data(GVariant *data)
     const gchar *contents = NULL;
     gsize length;
     GError *err = NULL;
-    gchar current_dir[256] = { 0 };
+
     length = g_variant_get_size(data);
     contents = (gchar *)g_variant_get_data(data);
 
     if (!g_file_set_contents(STORAGE_FILE, contents, length, &err))
     {
         g_warning("Error saving storage, message:%s\n!",err->message);
-        getcwd(current_dir, sizeof(current_dir));
-        g_print ("save dir %s\n",current_dir);
         return -1;
     }
 
@@ -245,8 +241,8 @@ gen_finger(gint dev_index, FpPrint *print)
     g_autofree gchar *user_id = fpi_print_generate_user_id(print);
     gssize user_id_len = strlen(user_id);
 
-    /*dummmy data must be exist*/
-    finger = fp_print_get_finger(print); /* this one doesnt count*/
+
+    finger = fp_print_get_finger(print); 
     uid = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE,
                                     user_id,
                                     user_id_len,
@@ -257,11 +253,9 @@ gen_finger(gint dev_index, FpPrint *print)
     g_object_set(print, "fpi-data", data, NULL);
     date = g_date_new();
     fp_print_set_enroll_date(print, date);
-
-    /*the followings are useful*/
-    fp_print_set_username(print, g_get_user_name());
+  
     g_object_set(print, "description", g_strdup_printf("%s/%d", pa_description, dev_index), NULL);
-    //fpi_print_fill_from_user_id(print, user_id);
+
 }
 /* -----------------------------USB layer group -----------------------------------*/
 static void
@@ -338,8 +332,8 @@ read_cb(FpiUsbTransfer *transfer, FpDevice *self,
 
     if (transfer->actual_length < PA_HEADER_LEN + PA_LEN_LEN + PA_SW_LEN)
     {
-        fp_info("PixelAut: read_cb len = %ld\n", transfer->actual_length);
-        fp_info("PixelAut: error %s\n", error->message);
+        fp_info("PixelAuth: read_cb len = %ld\n", transfer->actual_length);
+        fp_info("PixelAuth: error %s\n", error->message);
         return;
     }
 #if PA_DEBUG_USB
@@ -653,7 +647,7 @@ enroll_save(FpiSsm *ssm, FpDevice *self, GError *error)
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     fpi_device_get_enroll_data(self, &print);
     gint dev_new_index = -1;
-    fp_info("PixelAut:enroll done finger %d \n", fp_print_get_finger(print));
+    fp_info("PixelAuth:enroll done finger %d \n", fp_print_get_finger(print));
     if (padev->g_list.total_number - padev->original.total_number != 1) //not enroll 1 finger
         return;
     for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
@@ -691,9 +685,9 @@ verify(FpDevice *self)
 {
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
     FpPrint *print = NULL;
+    g_print ("verify!\n");
     fpi_device_get_verify_data(self, &print);
-    FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
-    gint dev_index = get_dev_index(self, enroll_print);
+    gint dev_index = get_dev_index(self, print);
     if(dev_index==PA_ERROR)
         verify_deinit(self, NULL, FPI_MATCH_FAIL, NULL);
 
@@ -863,8 +857,7 @@ verify_report(FpiSsm *ssm, FpDevice *self, GError *error)
     FpPrint *print = NULL;
     fpi_device_get_verify_data(self, &print);
     FpiDevicePa_Primex *padev = FPI_DEVICE_PA_PRIME(self);
-    FpPrint *enroll_print = pa_data_load(self, fp_print_get_finger(print));
-    gint dev_index = get_dev_index(self, enroll_print);
+    gint dev_index = get_dev_index(self, print);
     if(dev_index==PA_ERROR)
         verify_deinit(self, NULL, FPI_MATCH_ERROR, NULL);
     
@@ -943,7 +936,7 @@ static void handle_get_list(FpDevice *self,
     else
     {
         padev->g_list.total_number = get_data(data, data_len, padev->g_list.finger_map);
-        fp_info("PixelAut: handle_get_list number %d\n", padev->g_list.total_number);
+        fp_info("PixelAuth: handle_get_list number %d\n", padev->g_list.total_number);
         p_print(padev->g_list.finger_map, PA_MAX_FINGER_COUNT);
         fpi_ssm_next_state(ssm);
     }

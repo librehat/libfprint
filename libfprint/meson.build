@@ -91,7 +91,10 @@ foreach driver: drivers
         drivers_sources += [ 'drivers/upektc.c' ]
     endif
     if driver == 'pa_primex'
-        drivers_sources += [ 'drivers/pa_primex.c' ]
+         drivers_sources += [
+        'drivers/pixelauth/storage_helper.c',
+        'drivers/pixelauth/pa_primex.c',
+    ]
     endif
     if driver == 'upeksonly'
         drivers_sources += [ 'drivers/upeksonly.c' ]

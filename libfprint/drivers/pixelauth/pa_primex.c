@@ -421,7 +421,7 @@ static void handle_enroll_iterate_cb (FpDevice* self,
 static void
 enroll_started (FpiSsm* ssm,
                 FpDevice* self,
-                ?GError* error)
+                GError* error)
 {
     FpiDevicePa_Primex* padev = FPI_DEVICE_PA_PRIME (self);
     padev->opt_stage = PA_CMD_ENROLL;

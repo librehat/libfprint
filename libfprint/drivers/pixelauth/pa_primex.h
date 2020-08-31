@@ -1,3 +1,5 @@
+#pragma once
+
 #define PA_HEADER_LEN 5
 #define PA_LEN_LEN 2
 #define PA_INNER_HEADER_LEN 7
@@ -14,14 +16,6 @@
 
 #define PA_MAX_FINGER_COUNT 10
 #define PA_MAX_ENROLL_COUNT 16
-
-#define PA_OK 0
-#define PA_FPM_CONDITION 1
-#define PA_FPM_REFDATA 2
-#define PA_BUSY 3
-#define PA_P1P2 4
-#define PA_NOSPACE 5
-#define PA_ERROR -1
 
 #define PA_FPM_ENROLL_OK 0xe1
 #define PA_FPM_ENROLL_GOOD 0xe4
@@ -48,7 +42,7 @@ const gchar *str_delete = "u2f delete fp";
 const gchar *str_abort = "u2f abort fp";
 const gchar *str_verify = "wbf verify fp";
 
-#define STORAGE_FILE "pa-storage.variant"
+
 
 enum pa_primex_driver_data
 {
@@ -143,18 +137,6 @@ struct prime_data
     handle_get_fn callback;
     void *user_data;
 };
-
-const gchar *pa_description = "/dev/";
-
-/*Storage group*/
-static gchar *get_pa_data_descriptor(FpPrint *print, FpDevice *self, FpFinger finger);
-static GVariantDict *_load_data(void);
-static gint _save_data(GVariant *data);
-FpPrint *pa_data_load(FpDevice *self, FpFinger finger);
-gint pa_data_save(FpPrint *print, FpFinger finger);
-gint pa_data_del(FpDevice *self, FpFinger finger);
-gint get_dev_index(FpDevice *self, FpPrint *print);
-static void gen_finger(gint dev_index, FpPrint *print);
 
 /*USB layer group*/
 static void

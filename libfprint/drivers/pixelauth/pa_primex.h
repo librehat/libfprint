@@ -36,11 +36,11 @@
 
 #define PA_DEBUG_USB 0
 
-const guchar pa_header[] = {0x50, 0x58, 0x41, 0x54, 0xc0};
-const gchar *str_enroll = "u2f enroll fp";
-const gchar *str_delete = "u2f delete fp";
-const gchar *str_abort = "u2f abort fp";
-const gchar *str_verify = "wbf verify fp";
+const guchar pa_header[] = { 0x50, 0x58, 0x41, 0x54, 0xc0 };
+const gchar* str_enroll = "u2f enroll fp";
+const gchar* str_delete = "u2f delete fp";
+const gchar* str_abort = "u2f abort fp";
+const gchar* str_verify = "wbf verify fp";
 
 
 
@@ -114,8 +114,8 @@ static const FpIdEntry id_table[] = {
 
 typedef struct
 {
-    FpPrint *print;
-    GError *error;
+    FpPrint* print;
+    GError* error;
 } EnrollStopData;
 
 typedef struct pa_finger_list
@@ -124,120 +124,153 @@ typedef struct pa_finger_list
     guchar finger_map[PA_MAX_FINGER_COUNT];
 } pa_finger_list_t;
 
-typedef void (*handle_get_fn)(FpDevice *self,
-                              guchar *data,
+typedef void (*handle_get_fn)(FpDevice* self,
+                              guchar* data,
                               gssize data_len,
-                              void *user_data,
-                              GError *error);
+                              void* user_data,
+                              GError* error);
 
 struct prime_data
 {
     gssize buflen;
-    guint8 *buffer;
+    guint8* buffer;
     handle_get_fn callback;
-    void *user_data;
+    void* user_data;
 };
 
 /*USB layer group*/
 static void
-alloc_send_cmd_transfer(FpDevice *self,
-                        FpiSsm *ssm,
-                        guchar ins,
-                        guchar p1,
-                        guchar p2,
-                        const gchar *data,
-                        guint16 len);
-static void alloc_get_cmd_transfer(FpDevice *self, handle_get_fn callback, void *user_data);
-static void read_cb(FpiUsbTransfer *transfer, FpDevice *self, gpointer user_data, GError *error);
-static void handle_response(FpDevice *self, FpiUsbTransfer *transfer, struct prime_data *udata);
-static gint get_sw(guchar *data, gssize data_len);
-static gint get_data(guchar *data, gssize data_len, guchar *buf);
+alloc_send_cmd_transfer (FpDevice* self,
+                         FpiSsm* ssm,
+                         guchar ins,
+                         guchar p1,
+                         guchar p2,
+                         const gchar* data,
+                         guint16 len);
+static void alloc_get_cmd_transfer (FpDevice* self,
+                                    handle_get_fn callback,
+                                    void* user_data);
+static void read_cb (FpiUsbTransfer* transfer,
+                     FpDevice* self,
+                     gpointer user_data,
+                     GError* error);
+static void handle_response (FpDevice* self,
+                             FpiUsbTransfer* transfer,
+                             struct prime_data* udata);
+static gint get_sw (guchar* data, gssize data_len);
+static gint get_data (guchar* data,
+                      gssize data_len,
+                      guchar* buf);
 
 /* Init group*/
-static void dev_init(FpDevice *self);
-static void abort_run_state(FpiSsm *ssm, FpDevice *self);
-static void handle_get_abort(FpDevice *self,
-                             guchar *data,
-                             gssize data_len,
-                             void *user_data,
-                             GError *error);
-static void abort_done(FpiSsm *ssm, FpDevice *self, GError *error);
-static void init_done(FpiSsm *ssm, FpDevice *self, GError *error);
+static void dev_init (FpDevice* self);
+static void abort_run_state (FpiSsm* ssm, FpDevice* self);
+static void handle_get_abort (FpDevice* self,
+                              guchar* data,
+                              gssize data_len,
+                              void* user_data,
+                              GError* error);
+static void abort_done (FpiSsm* ssm,
+                        FpDevice* self,
+                        GError* error);
+static void init_done (FpiSsm* ssm,
+                       FpDevice* self,
+                       GError* error);
 
 /*Deinit group*/
-static void dev_exit(FpDevice *self);
+static void dev_exit (FpDevice* self);
 
 /*Enroll group*/
-static void enroll_init(FpDevice *self);
-static void enroll(FpDevice *self);
-static void enroll_start_run_state(FpiSsm *ssm, FpDevice *self);
-static void handle_get_enroll(FpDevice *self,
-                              guchar *data,
-                              gssize data_len,
-                              void *user_data,
-                              GError *error);
-static void enroll_iterate(FpDevice *self);
+static void enroll_init (FpDevice* self);
+static void enroll (FpDevice* self);
+static void enroll_start_run_state (FpiSsm* ssm, FpDevice* self);
+static void handle_get_enroll (FpDevice* self,
+                               guchar* data,
+                               gssize data_len,
+                               void* user_data,
+                               GError* error);
+static void enroll_iterate (FpDevice* self);
 static void
-enroll_iterate_cmd_cb(FpiUsbTransfer *transfer,
-                      FpDevice *self,
-                      gpointer user_data,
-                      GError *error);
+enroll_iterate_cmd_cb (FpiUsbTransfer* transfer,
+                       FpDevice* self,
+                       gpointer user_data,
+                       GError* error);
 static void
-handle_enroll_iterate_cb(FpDevice *self,
-                         guchar *data,
-                         gssize data_len,
-                         void *user_data,
-                         GError *error);
-static void enroll_started(FpiSsm *ssm, FpDevice *self, GError *error);
-static void do_enroll_done(FpDevice *self);
-static void enroll_save(FpiSsm *ssm, FpDevice *self, GError *error);
-static void enroll_finish_run_state(FpiSsm *ssm, FpDevice *self);
-static void enroll_deinit(FpDevice *self, FpPrint *print, GError *error);
+handle_enroll_iterate_cb (FpDevice* self,
+                          guchar* data,
+                          gssize data_len,
+                          void* user_data,
+                          GError* error);
+static void enroll_started (FpiSsm* ssm,
+                            FpDevice* self,
+                            GError* error);
+static void do_enroll_done (FpDevice* self);
+static void enroll_save (FpiSsm* ssm,
+                         FpDevice* self,
+                         GError* error);
+static void enroll_finish_run_state (FpiSsm* ssm, FpDevice* self);
+static void enroll_deinit (FpDevice* self,
+                           FpPrint* print,
+                           GError* error);
 
 /*Verify group*/
-static void verify(FpDevice *self);
-static void verify_start_run_state(FpiSsm *ssm, FpDevice *self);
+static void verify (FpDevice* self);
+static void verify_start_run_state (FpiSsm* ssm, FpDevice* self);
 static void
-handle_get_verify(FpDevice *self,
-                  guchar *data,
-                  gssize data_len,
-                  void *user_data,
-                  GError *error);
-static void verify_iterate(FpDevice *self);
-static void verify_iterate_cmd_cb(FpiUsbTransfer *transfer, FpDevice *self, gpointer user_data, GError *error);
+handle_get_verify (FpDevice* self,
+                   guchar* data,
+                   gssize data_len,
+                   void* user_data,
+                   GError* error);
+static void verify_iterate (FpDevice* self);
+static void verify_iterate_cmd_cb (FpiUsbTransfer* transfer,
+                                   FpDevice* self,
+                                   gpointer user_data,
+                                   GError* error);
 static void
-handle_verify_iterate_cb(FpDevice *self,
-                         guchar *data,
-                         gssize data_len,
-                         void *user_data,
-                         GError *error);
-static void do_verify_done(FpDevice *self);
-static void verify_deinit(FpDevice *self, FpPrint *print, FpiMatchResult result, GError *error);
-static void verify_started(FpiSsm *ssm, FpDevice *self, GError *error);
+handle_verify_iterate_cb (FpDevice* self,
+                          guchar* data,
+                          gssize data_len,
+                          void* user_data,
+                          GError* error);
+static void do_verify_done (FpDevice* self);
+static void verify_deinit (FpDevice* self,
+                           FpPrint* print,
+                           FpiMatchResult result,
+                           GError* error);
+static void verify_started (FpiSsm* ssm,
+                            FpDevice* self,
+                            GError* error);
 static void
-handle_get_vid(FpDevice *self,
-               guchar *data,
-               gssize data_len,
-               void *user_data,
-               GError *error);
-static void verify_finish_run_state(FpiSsm *ssm, FpDevice *self);
-static void verify_report(FpiSsm *ssm, FpDevice *self, GError *error);
+handle_get_vid (FpDevice* self,
+                guchar* data,
+                gssize data_len,
+                void* user_data,
+                GError* error);
+static void verify_finish_run_state (FpiSsm* ssm, FpDevice* self);
+static void verify_report (FpiSsm* ssm,
+                           FpDevice* self,
+                           GError* error);
 /*List group*/
-static void list(FpDevice *self);
-static void list_done(FpiSsm *ssm, FpDevice *self, GError *error);
-static void handle_get_list(FpDevice *self,
-                            guchar *data,
-                            gssize data_len,
-                            void *user_data,
-                            GError *error);
-static void list_run_state(FpiSsm *ssm, FpDevice *self);
+static void list (FpDevice* self);
+static void list_done (FpiSsm* ssm,
+                       FpDevice* self,
+                       GError* error);
+static void handle_get_list (FpDevice* self,
+                             guchar* data,
+                             gssize data_len,
+                             void* user_data,
+                             GError* error);
+static void list_run_state (FpiSsm* ssm, FpDevice* self);
 
 /*Delete group*/
-static void delete (FpDevice *self);
-static void delete_cmd_state(FpiSsm *ssm, FpDevice *self);
-static void handle_get_delete(FpDevice *self,
-                              guchar *data,
-                              gssize data_len,
-                              void *user_data,
-                              GError *error);
-static void delete_done(FpiSsm *ssm, FpDevice *self, GError *error);
+static void delete (FpDevice* self);
+static void delete_cmd_state (FpiSsm* ssm, FpDevice* self);
+static void handle_get_delete (FpDevice* self,
+                               guchar* data,
+                               gssize data_len,
+                               void* user_data,
+                               GError* error);
+static void delete_done (FpiSsm* ssm,
+                         FpDevice* self,
+                         GError* error);

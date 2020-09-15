@@ -42,7 +42,7 @@
 
 const gchar * pa_description = "/dev/";
 
-gchar * get_pa_data_descriptor (FpPrint  * print,
+gchar * get_pa_data_descriptor (FpPrint * print,
                                 FpDevice * self,
                                 gint       dev_index)
 {
@@ -76,8 +76,8 @@ GVariantDict * _load_data (void)
 
   if (!g_file_get_contents (STORAGE_FILE, &contents, &length, &err))
   {
-      g_warning ("Error loading storage, assuming it is empty, message:%s\n", err->message);
-      return g_variant_dict_new (NULL);
+    g_warning ("Error loading storage, assuming it is empty, message:%s\n", err->message);
+    return g_variant_dict_new (NULL);
   }
 
   var = g_variant_new_from_data (G_VARIANT_TYPE_VARDICT,
@@ -113,7 +113,7 @@ gint _save_data (GVariant * data)
   return 0;
 }
 
-FpPrint * pa_data_load (FpDevice    * self,
+FpPrint * pa_data_load (FpDevice * self,
                         FpFinger      finger,
                         const gchar * username,
                         gint          db_count)
@@ -141,18 +141,24 @@ FpPrint * pa_data_load (FpDevice    * self,
         g_warning ("Error deserializing data: %s", error->message);
 
       if (fp_print_get_finger (print) != finger)
+      {
         continue;
+      }
+
 
       if (username)
       {
         if (g_strcmp0 (fp_print_get_username (print), username) == 0)
           return print;
         else
-          return NULL;
-            }
+          continue;
+      }
+      else
+      {
         return print;
-        }
+      }
     }
+  }
   return NULL;
 }
 
@@ -183,8 +189,8 @@ gint pa_data_save (FpPrint * print, gint dev_index)
   return res;
 }
 
-gint pa_data_del (FpDevice    * self,
-                  FpPrint     * print,
+gint pa_data_del (FpDevice * self,
+                  FpPrint * print,
                   const gchar * username,
                   gint          db_count)
 {
@@ -220,18 +226,18 @@ gint pa_data_del (FpDevice    * self,
 
       if (g_strcmp0 (fp_print_get_username (print_got), username) == 0)
       {
-         g_variant_dict_remove (dict, descr);
-         _save_data (g_variant_dict_end (dict));
-         return PA_OK;
+        g_variant_dict_remove (dict, descr);
+        _save_data (g_variant_dict_end (dict));
+        return PA_OK;
       }
     }
   }
 
-    return PA_ERROR;
+  return PA_ERROR;
 }
 
 gint get_dev_index (FpDevice * self,
-                    FpPrint  * print,
+                    FpPrint * print,
                     gint       db_count)
 {
   FpPrint * enroll_print = NULL;

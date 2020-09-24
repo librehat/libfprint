@@ -1,4 +1,4 @@
-libfprint (1:1.90.3+tod1-0ubuntu1) UNRELEASED; urgency=medium
+libfprint (1:1.90.3+tod1-0ubuntu1) groovy; urgency=medium
 
   * New upstream release (LP: #1896861):
     - New goodixmoc driver supporting Goodix USB devices:
@@ -10,7 +10,7 @@ libfprint (1:1.90.3+tod1-0ubuntu1) UNRELEASED; urgency=medium
     - Fix issue with aes3k driver
   * debian/libfprint-2-tod1.symbols: Added new GType symbols
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 24 Sep 2020 06:08:59 +0200
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 24 Sep 2020 06:14:30 +0200
 
 libfprint (1:1.90.2+tod1-0ubuntu1) groovy; urgency=medium
 

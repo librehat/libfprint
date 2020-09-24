@@ -215,7 +215,8 @@ fp_context_finalize (GObject *object)
   g_clear_object (&priv->cancellable);
   g_clear_pointer (&priv->drivers, g_array_unref);
 
-  g_object_run_dispose (G_OBJECT (priv->usb_ctx));
+  if (priv->usb_ctx)
+    g_object_run_dispose (G_OBJECT (priv->usb_ctx));
   g_clear_object (&priv->usb_ctx);
 
   fpi_tod_shared_drivers_unregister ();
@@ -301,7 +302,7 @@ fp_context_init (FpContext *self)
   priv->usb_ctx = g_usb_context_new (&error);
   if (!priv->usb_ctx)
     {
-      fp_warn ("Could not initialise USB Subsystem: %s", error->message);
+      g_message ("Could not initialise USB Subsystem: %s", error->message);
     }
   else
     {
@@ -354,7 +355,8 @@ fp_context_enumerate (FpContext *context)
   priv->enumerated = TRUE;
 
   /* USB devices are handled from callbacks */
-  g_usb_context_enumerate (priv->usb_ctx);
+  if (priv->usb_ctx)
+    g_usb_context_enumerate (priv->usb_ctx);
 
   /* Handle Virtual devices based on environment variables */
   for (i = 0; i < priv->drivers->len; i++)

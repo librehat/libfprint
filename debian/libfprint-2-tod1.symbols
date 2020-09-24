@@ -109,6 +109,7 @@ libfprint-2-tod.so.1 libfprint-2-tod1 #MINVER#
  fpi_byte_writer_reset@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_byte_writer_reset_and_get_data@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_device_action_error@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_device_action_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
  fpi_device_action_is_cancelled@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_device_add_timeout@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_device_capture_complete@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
@@ -151,7 +152,10 @@ libfprint-2-tod.so.1 libfprint-2-tod1 #MINVER#
  fpi_image_device_retry_scan@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_image_device_session_error@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_image_device_set_bz3_threshold@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_image_device_state_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
+ fpi_image_flags_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
  fpi_image_resize@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_match_result_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
  fpi_mean_sq_diff_norm@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_add_from_image@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_add_print@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
@@ -160,6 +164,7 @@ libfprint-2-tod.so.1 libfprint-2-tod1 #MINVER#
  fpi_print_generate_user_id@LIBFPRINT_TOD_1.0.0 1:1.90.2+tod1
  fpi_print_set_device_stored@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_print_set_type@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_print_type_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
  fpi_ssm_cancel_delayed_state_change@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_ssm_dup_error@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_ssm_free@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
@@ -180,6 +185,7 @@ libfprint-2-tod.so.1 libfprint-2-tod1 #MINVER#
  fpi_ssm_usb_transfer_cb@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_ssm_usb_transfer_with_weak_pointer_cb@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_std_sq_dev@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
+ fpi_transfer_type_get_type@LIBFPRINT_TOD_1.0.0 1:1.90.3+tod1
  fpi_usb_transfer_fill_bulk@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_usb_transfer_fill_bulk_full@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1
  fpi_usb_transfer_fill_control@LIBFPRINT_TOD_1.0.0 1:1.90.1+tod1

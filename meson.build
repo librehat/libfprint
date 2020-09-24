@@ -1,5 +1,5 @@
 project('libfprint', [ 'c', 'cpp' ],
-    version: '1.90.2+tod1',
+    version: '1.90.3+tod1',
     license: 'LGPLv2.1+',
     default_options: [
         'buildtype=debugoptimized',
@@ -110,6 +110,7 @@ default_drivers = [
     'upektc',
     'upeksonly',
     'upekts',
+    'goodixmoc',
 ]
 
 all_drivers = default_drivers + virtual_drivers

@@ -748,6 +748,9 @@ static void verify_report (FpiSsm   * ssm,
 
 static void list (FpDevice * self)
 {
+	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
+
+	memset (padev->g_list.finger_map, 0xff, PA_MAX_FINGER_COUNT);
 	FpiSsm * ssm = fpi_ssm_new (self, list_run_state, LIST_DONE);
 	fpi_ssm_start (ssm, list_done);
 }

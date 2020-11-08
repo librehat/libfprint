@@ -117,7 +117,7 @@ static void alloc_get_cmd_transfer (FpDevice      * self,
 
 	udata->buffer = g_realloc (udata->buffer, PA_MAX_GET_LEN);
 	udata->buflen = PA_MAX_GET_LEN;
-	fpi_usb_transfer_fill_bulk_full (transfer, PA_IN, udata->buffer, udata->buflen, NULL);
+	fpi_usb_transfer_fill_bulk_full (transfer, PA_IN, udata->buffer, udata->buflen, g_free);
 	fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, read_cb, udata);
 }
 

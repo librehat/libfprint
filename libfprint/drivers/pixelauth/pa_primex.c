@@ -23,7 +23,6 @@
 
 #include "drivers_api.h"
 #include "pixelauth.h"
-#include "storage_helper.h"
 #include "pa_primex.h"
 
 struct _FpiDevicePa_Primex
@@ -281,20 +280,6 @@ static void enroll_init (FpDevice * self)
 }
 static void enroll (FpDevice * self)
 {
-	FpPrint * print = NULL;
-	fpi_device_get_enroll_data (self, &print);
-	FpPrint * enroll_print = pa_data_load (self,
-										                     fp_print_get_finger (print),
-										                     fp_print_get_username (print),
-										                     PA_MAX_FINGER_COUNT);
-	if (enroll_print) //refuse to enroll again if same user same finger
-	{
-		enroll_deinit (self,
-					         NULL,
-					         fpi_device_error_new (FP_DEVICE_ERROR_DATA_INVALID)); //no useful error code
-		return;
-	}
-
 	enroll_init (self);
 	FpiSsm * ssm = fpi_ssm_new (self, enroll_start_run_state, ENROLL_UPDATE);
 	fpi_ssm_start (ssm, enroll_started);
@@ -433,14 +418,12 @@ static void enroll_deinit (FpDevice * self,
                            GError   * error)
 {
 	if (error)
-	{
 		fp_warn ("Error enroll deinitializing: %s", error->message);
-		fpi_device_enroll_complete (self, NULL, error);
-	}
-	else
-	{
-		fpi_device_enroll_complete (self, print, NULL);
-	}
+
+	/* Here we could even assert that if error, then print is NULL, but this is
+	 * already part of fpi_device_enroll_complete */
+
+	fpi_device_enroll_complete (self, print, error);
 }
 static void do_enroll_done (FpDevice * self)
 {
@@ -453,6 +436,46 @@ static void do_enroll_done (FpDevice * self)
 	FpiSsm * ssm = fpi_ssm_new (self, enroll_finish_run_state, ENROLL_DONE);
 	fpi_ssm_start (ssm, enroll_save);
 }
+
+static void
+initialize_pa_print (FpPrint *print, FpFinger finger, int dev_index)
+{
+	g_autoptr (GVariant) data = NULL;
+	g_autofree char *description = NULL;
+
+	g_assert (dev_index >= 0);
+
+	fpi_print_set_type (print, FPI_PRINT_RAW);
+	fpi_print_set_device_stored (print, TRUE);
+
+	data = g_variant_new ("(yy)", finger, dev_index);
+	description = g_strdup_printf("Print at device index %d", dev_index);
+
+	g_object_set (print,
+								"fpi-data", g_steal_pointer (&data),
+								"description", g_steal_pointer (&description),
+								NULL);
+}
+
+static void
+set_enrolled_print_data (FpPrint * print, int dev_index)
+{
+  g_autoptr(GDateTime) datetime = NULL;
+  g_autoptr(GDate) date = NULL;
+	gint year, month, day;
+  guint finger;
+
+  finger = fp_print_get_finger (print);
+	fp_dbg ("Saving print data for finger %u, at device index %d", finger, dev_index);
+
+	initialize_pa_print (print, finger, dev_index);
+
+  datetime = g_date_time_new_now_local ();
+  g_date_time_get_ymd (datetime, &year, &month, &day);
+  date = g_date_new_dmy (day, month, year);
+  fp_print_set_enroll_date (print, date);
+}
+
 static void enroll_save (FpiSsm   * ssm,
                          FpDevice * self,
                          GError   * error)
@@ -472,10 +495,9 @@ static void enroll_save (FpiSsm   * ssm,
 			break;
 		}
 	}
-	gen_finger (dev_new_index, print);
-	//pa_data_save(print, fp_print_get_finger(print));
-	pa_data_save (print, dev_new_index);
-	enroll_deinit (self, print, error);
+
+	set_enrolled_print_data (print, dev_new_index);
+	enroll_deinit (self, g_object_ref (print), error);
 }
 
 static void enroll_finish_run_state (FpiSsm * ssm, FpDevice * self)
@@ -493,15 +515,44 @@ static void enroll_finish_run_state (FpiSsm * ssm, FpDevice * self)
 	}
 }
 
+static gint
+get_dev_index (FpDevice * self,
+							 FpPrint * print)
+{
+	g_autoptr(GVariant) data = NULL;
+	guint8 finger;
+	guint8 dev_index;
+
+	if (print == NULL)
+		return PA_ERROR;
+
+	g_object_get (print, "fpi-data", &data, NULL);
+	if (!g_variant_check_format_string (data, "(yy)", FALSE))
+		return PA_ERROR;
+
+	g_variant_get (data,
+								 "(yy)",
+								 &finger,
+								 &dev_index);
+
+  fp_info ("get_dev_index %d", dev_index);
+
+	if (dev_index == PA_MAX_FINGER_COUNT)
+		return PA_ERROR;
+
+  return dev_index;
+}
+
 /* -----------------------------Verify group -----------------------------------*/
 static void verify (FpDevice * self)
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	FpPrint * print = NULL;
 	fpi_device_get_verify_data (self, &print);
-	gint dev_index = get_dev_index (self, print, PA_MAX_FINGER_COUNT);
+	gint dev_index = get_dev_index (self, print);
 	if (dev_index == PA_ERROR)
 	{
+		// Should set a GError here!
 		verify_deinit (self, NULL, FPI_MATCH_FAIL, NULL);
 		return;
 	}
@@ -676,15 +727,15 @@ static void verify_report (FpiSsm   * ssm,
 	FpPrint * print = NULL;
 	fpi_device_get_verify_data (self, &print);
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
-	gint dev_index = get_dev_index (self, print, PA_MAX_FINGER_COUNT);
+	gint dev_index = get_dev_index (self, print);
 	if (dev_index == PA_ERROR)
-		verify_deinit (self, NULL, FPI_MATCH_ERROR, NULL);
+		verify_deinit (self, NULL, FPI_MATCH_ERROR, NULL); // FIXME: SET PROPER GError
 
 	for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
 	{
 		if (dev_index == padev->matched_index[i])
 		{
-			verify_deinit (self, print, FPI_MATCH_SUCCESS, NULL);
+			verify_deinit (self, g_object_ref (print), FPI_MATCH_SUCCESS, NULL);
 			return;
 		}
 	}
@@ -703,24 +754,12 @@ static void list_done (FpiSsm   * ssm,
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	padev->list_result = g_ptr_array_new_with_free_func (g_object_unref);
-	for (gint i = 1; i < PA_MAX_FINGER_COUNT + 1; i++)
+	for (gint i = 0; i < padev->g_list.total_number; i++)
 	{
-		FpPrint * back = pa_data_load (self, i, NULL, PA_MAX_FINGER_COUNT);
-		if (!back)
-			continue;
-
 		FpPrint * print = fp_print_new (FP_DEVICE (self));
-		fpi_print_set_type (print, FPI_PRINT_RAW);
-		fpi_print_set_device_stored (print, TRUE);
-		fp_info ("PixelAut: username %s finger %d\n",
-		fp_print_get_username (back),
-		fp_print_get_finger (back));
-		fp_print_set_username (print, fp_print_get_username (back));
-		fp_print_set_finger (print, fp_print_get_finger (back));
-		g_object_set (print,
-					        "description",
-					        fp_print_get_description (back),
-					        NULL);
+
+		initialize_pa_print (print, FP_FINGER_UNKNOWN, padev->g_list.finger_map[i]);
+
 		g_ptr_array_add (padev->list_result, g_object_ref_sink (print));
 	}
 
@@ -754,7 +793,8 @@ static void handle_get_list (FpDevice * self,
 	gint result = get_sw (data, data_len);
 	if (result != PA_OK)
 	{
-		//TODO: error handle
+		fpi_ssm_mark_failed (ssm, fpi_device_error_new_msg (
+			FP_DEVICE_ERROR_PROTO, "Impossible to get print list %d", result));
 	}
 	else
 	{
@@ -778,7 +818,8 @@ static void delete_cmd_state (FpiSsm * ssm, FpDevice * self)
 	{
 	case DELETE_SEND:
 		fpi_device_get_delete_data (self, &print);
-		gint dev_index = get_dev_index (self, print, PA_MAX_FINGER_COUNT);
+		gint dev_index = get_dev_index (self, print);
+		// FIXME: handle error on dev_index == PA_ERROR
 		alloc_send_cmd_transfer (self, ssm, PA_CMD_DELETE, dev_index + 1, 0, str_delete, strlen (str_delete));
 		//for FK, close upper and open lower to delete all exists
 		//alloc_send_cmd_transfer(self, ssm, PA_CMD_DELETE, 0, 0, str_delete, strlen(str_delete));
@@ -813,7 +854,6 @@ static void delete_done (FpiSsm   * ssm,
 {
 	FpPrint * print = NULL;
 	fpi_device_get_delete_data (self, &print);
-	pa_data_del (self, print, fp_print_get_username (print), PA_MAX_FINGER_COUNT);
 	fpi_device_delete_complete (self, NULL);
 }
 

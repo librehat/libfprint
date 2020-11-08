@@ -152,6 +152,26 @@ on_match_cb (FpDevice *dev, FpPrint *match, FpPrint *print,
     }
 }
 
+static FpPrint *
+get_stored_print (FpDevice *dev, VerifyData *verify_data)
+{
+  FpPrint *verify_print;
+
+  g_print ("Loading previously enrolled %s finger data...\n",
+            finger_to_string (verify_data->finger));
+
+  verify_print = print_data_load (dev, verify_data->finger);
+
+  if (!verify_print)
+    {
+      g_warning ("Failed to load fingerprint data");
+      g_warning ("Did you remember to enroll your %s finger first?",
+                  finger_to_string (verify_data->finger));
+    }
+
+  return verify_print;
+}
+
 static void
 on_list_completed (FpDevice *dev, GAsyncResult *res, gpointer user_data)
 {
@@ -164,7 +184,7 @@ on_list_completed (FpDevice *dev, GAsyncResult *res, gpointer user_data)
 
   if (!error)
     {
-      FpPrint *verify_print = NULL;
+      g_autoptr(FpPrint) verify_print = NULL;
       guint i;
 
       if (!prints->len)
@@ -185,14 +205,18 @@ on_list_completed (FpDevice *dev, GAsyncResult *res, gpointer user_data)
 
               if (!verify_print || !print_date || !verify_print_date ||
                   g_date_compare (print_date, verify_print_date) >= 0)
-                verify_print = print;
+                {
+                  g_clear_object (&verify_print);
+                  verify_print = g_object_ref (print);
+                }
             }
         }
 
       if (!verify_print)
+        verify_print = get_stored_print (dev, verify_data);
+
+      if (!verify_print)
         {
-          g_warning ("Did you remember to enroll your %s finger first?",
-                     finger_to_string (verify_data->finger));
           verify_quit (dev, verify_data);
           return;
         }
@@ -239,17 +263,10 @@ start_verification (FpDevice *dev, VerifyData *verify_data)
     }
   else
     {
-      g_print ("Loading previously enrolled %s finger data...\n",
-               finger_to_string (verify_data->finger));
-      g_autoptr(FpPrint) verify_print = NULL;
-
-      verify_print = print_data_load (dev, verify_data->finger);
+      g_autoptr(FpPrint) verify_print = get_stored_print (dev, verify_data);
 
       if (!verify_print)
         {
-          g_warning ("Failed to load fingerprint data");
-          g_warning ("Did you remember to enroll your %s finger first?",
-                     finger_to_string (verify_data->finger));
           verify_quit (dev, verify_data);
           return;
         }

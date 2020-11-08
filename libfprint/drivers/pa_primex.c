@@ -235,17 +235,17 @@ static void abort_done (FpiSsm   * ssm,
 	fp_info ("PixelAuth:cancel sent!\n");
 	if (padev->opt_stage == PA_CMD_ENROLL)
 	{
-		enroll_deinit (self, 
-                   NULL, 
-                   g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED, 
+		enroll_deinit (self,
+                   NULL,
+                   g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED,
                    "Cancelled"));
 	}
 	else if (padev->opt_stage == PA_CMD_VERIFY)
 	{
-		verify_deinit (self, 
-                   NULL, 
-                   FPI_MATCH_FAIL, 
-                   g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED, 
+		verify_deinit (self,
+                   NULL,
+                   FPI_MATCH_FAIL,
+                   g_error_new_literal (G_IO_ERROR, G_IO_ERROR_CANCELLED,
                    "Cancelled"));
 	}
 }

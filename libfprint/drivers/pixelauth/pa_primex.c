@@ -371,7 +371,7 @@ handle_enroll_iterate_cb (FpDevice * self,
 			fpi_device_enroll_progress (self,
 										padev->enroll_stage,
 										NULL,
-										fpi_device_retry_new (FP_DEVICE_RETRY_GENERAL));
+										fpi_device_retry_new (FP_DEVICE_RETRY_REMOVE_FINGER));
 		}
 		if (code == PA_FPM_ENROLL_NOTFULLFINGER)
 		{

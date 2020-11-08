@@ -583,8 +583,6 @@ static void verify_deinit (FpDevice       * self,
                            FpiMatchResult   result,
                            GError         * error)
 {
-	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
-	memset (padev->matched_index, 0xff, PA_MAX_FINGER_COUNT);
 	fpi_device_verify_report (self, result, print, NULL);
 	fpi_device_verify_complete (self, error);
 }
@@ -706,7 +704,9 @@ handle_get_vid (FpDevice * self,
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	FpiSsm * ssm = user_data;
-	guchar index[PA_MAX_FINGER_COUNT] = { 0 };
+	guchar index[PA_MAX_FINGER_COUNT];
+
+	memset (index, 0xff, PA_MAX_FINGER_COUNT);
 	gint result = get_sw (data, data_len);
 	if (result == PA_OK)
 	{
@@ -730,6 +730,9 @@ static void verify_report (FpiSsm   * ssm,
 	gint dev_index = get_dev_index (self, print);
 	if (dev_index == PA_ERROR)
 		verify_deinit (self, NULL, FPI_MATCH_ERROR, NULL); // FIXME: SET PROPER GError
+
+	fp_info("Matching device index %d",dev_index);
+	p_print(padev->matched_index, PA_MAX_FINGER_COUNT);
 
 	for (gint i = 0; i < PA_MAX_FINGER_COUNT; i++)
 	{

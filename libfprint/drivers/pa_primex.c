@@ -29,12 +29,11 @@ struct _FpiDevicePa_Primex
 {
 	FpDevice parent;
 	gint enroll_stage;
-	GPtrArray * list_result;
 	guchar matched_index[PA_MAX_FINGER_COUNT];
 	gint opt_stage;
 	pa_finger_list_t g_list;   //only use to figure enroll change out
 	pa_finger_list_t original; //only use to figure enroll change out
-	gboolean is_canceled;
+	GCancellable *cancellable;
 };
 
 G_DECLARE_FINAL_TYPE (FpiDevicePa_Primex, fpi_device_pa_primex, FPI, DEVICE_PA_PRIME, FpDevice);
@@ -96,11 +95,11 @@ alloc_send_cmd_transfer (FpDevice    * self,
 	fp_info ("PixelAuth: padev->op_state %x ins %x\n", padev->opt_stage, ins);
 #endif
 	if (ins == PA_CMD_FPSTATE && padev->opt_stage == PA_CMD_ENROLL)
-		fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, enroll_iterate_cmd_cb, NULL);
+		fpi_usb_transfer_submit (transfer, TIMEOUT, padev->cancellable, enroll_iterate_cmd_cb, NULL);
 	else if (ins == PA_CMD_FPSTATE && padev->opt_stage == PA_CMD_VERIFY)
-		fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, verify_iterate_cmd_cb, NULL);
+		fpi_usb_transfer_submit (transfer, TIMEOUT, padev->cancellable, verify_iterate_cmd_cb, NULL);
 	else
-		fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
+		fpi_usb_transfer_submit (transfer, TIMEOUT, padev->cancellable, fpi_ssm_usb_transfer_cb, NULL);
 }
 
 static void alloc_get_cmd_transfer (FpDevice      * self,
@@ -108,6 +107,7 @@ static void alloc_get_cmd_transfer (FpDevice      * self,
                                     void          * user_data)
 {
 	FpiUsbTransfer * transfer = fpi_usb_transfer_new (self);
+	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	struct prime_data * udata = g_new0 (struct prime_data, 1);
 
 	udata->buflen = 0;
@@ -118,7 +118,7 @@ static void alloc_get_cmd_transfer (FpDevice      * self,
 	udata->buffer = g_realloc (udata->buffer, PA_MAX_GET_LEN);
 	udata->buflen = PA_MAX_GET_LEN;
 	fpi_usb_transfer_fill_bulk_full (transfer, PA_IN, udata->buffer, udata->buflen, g_free);
-	fpi_usb_transfer_submit (transfer, TIMEOUT, NULL, read_cb, udata);
+	fpi_usb_transfer_submit (transfer, TIMEOUT, padev->cancellable, read_cb, udata);
 }
 
 static void read_cb (FpiUsbTransfer * transfer,
@@ -127,6 +127,9 @@ static void read_cb (FpiUsbTransfer * transfer,
                      GError         * error)
 {
 	struct prime_data * udata = user_data;
+
+	if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
+		return;
 
 	if (transfer->actual_length < PA_HEADER_LEN + PA_LEN_LEN + PA_SW_LEN)
 	{
@@ -185,12 +188,15 @@ static void dev_init (FpDevice * self)
 {
 	FpiSsm * ssm;
 	GError * error = NULL;
+	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 
 	if (!g_usb_device_claim_interface (fpi_device_get_usb_device (self), 0, 0, &error))
 	{
 		fpi_device_open_complete (self, error);
 		return;
 	}
+
+	padev->cancellable = g_cancellable_new ();
 
 	ssm = fpi_ssm_new (self, abort_run_state, INIT_DONE);
 	fpi_ssm_start (ssm, init_done);
@@ -261,7 +267,7 @@ static void dev_exit (FpDevice * self)
 {
 	GError * error = NULL;
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
-	g_clear_pointer (&padev->list_result, g_ptr_array_unref);
+	g_clear_object (&padev->cancellable);
 	G_DEBUG_HERE ();
 	g_usb_device_release_interface (fpi_device_get_usb_device (self), 0, 0, &error);
 	fpi_device_close_complete (self, error);
@@ -276,7 +282,6 @@ static void enroll_init (FpDevice * self)
 	padev->g_list.total_number = 0;
 	padev->original.total_number = 0;
 	padev->enroll_stage = 0;
-	padev->is_canceled = FALSE;
 }
 static void enroll (FpDevice * self)
 {
@@ -332,7 +337,7 @@ static void handle_get_enroll (FpDevice * self,
 	}
 }
 
-static void enroll_iterate (FpDevice * self)
+static void enroll_iterate (FpDevice * self, FpiSsm *ssm)
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	if (padev->is_canceled)
@@ -341,7 +346,7 @@ static void enroll_iterate (FpDevice * self)
 		fpi_ssm_start (ssm, abort_done);
 		return;
 	}
-	alloc_send_cmd_transfer (self, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
+	alloc_send_cmd_transfer (self, ssm, PA_CMD_FPSTATE, 0, 0, NULL, 1);
 }
 
 static void
@@ -411,7 +416,7 @@ static void enroll_started (FpiSsm   * ssm,
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	padev->opt_stage = PA_CMD_ENROLL;
-	enroll_iterate (self);
+	enroll_iterate (self, ssm);
 }
 static void enroll_deinit (FpDevice * self,
                            FpPrint  * print,
@@ -608,7 +613,7 @@ handle_get_verify (FpDevice * self,
 	}
 }
 
-static void verify_iterate (FpDevice * self)
+static void verify_iterate (FpDevice * self, FpiSsm *ssm)
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	if (padev->is_canceled)
@@ -617,7 +622,7 @@ static void verify_iterate (FpDevice * self)
 		fpi_ssm_start (ssm, abort_done);
 		return;
 	}
-	alloc_send_cmd_transfer (self, NULL, PA_CMD_FPSTATE, 0, 0, NULL, 1);
+	alloc_send_cmd_transfer (self, ssm, PA_CMD_FPSTATE, 0, 0, NULL, 1);
 }
 
 static void verify_started (FpiSsm   * ssm,
@@ -626,7 +631,7 @@ static void verify_started (FpiSsm   * ssm,
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
 	padev->opt_stage = PA_CMD_VERIFY;
-	verify_iterate (self);
+	verify_iterate (self, ssm);
 }
 static void verify_iterate_cmd_cb (FpiUsbTransfer * transfer,
                                    FpDevice       * self,
@@ -759,19 +764,18 @@ static void list_done (FpiSsm   * ssm,
                        GError   * error)
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
-	padev->list_result = g_ptr_array_new_with_free_func (g_object_unref);
+	g_autoptr(GPtrArray) result = g_ptr_array_new_with_free_func (g_object_unref);
+
 	for (gint i = 0; i < padev->g_list.total_number; i++)
 	{
 		FpPrint * print = fp_print_new (FP_DEVICE (self));
 
 		initialize_pa_print (print, FP_FINGER_UNKNOWN, padev->g_list.finger_map[i]);
 
-		g_ptr_array_add (padev->list_result, g_object_ref_sink (print));
+		g_ptr_array_add (result, g_object_ref_sink (print));
 	}
 
-	fpi_device_list_complete (FP_DEVICE (self),
-							              g_steal_pointer (&padev->list_result),
-							              NULL);
+	fpi_device_list_complete (FP_DEVICE (self), g_steal_pointer (&result), NULL);
 }
 static void list_run_state (FpiSsm * ssm, FpDevice * self)
 {
@@ -866,7 +870,9 @@ static void delete_done (FpiSsm   * ssm,
 static void cancel (FpDevice * self)
 {
 	FpiDevicePa_Primex * padev = FPI_DEVICE_PA_PRIME (self);
-	padev->is_canceled = TRUE;
+	g_cancellable_cancel (padev->cancellable);
+  g_clear_object (&padev->cancellable);
+  padev->cancellable = g_cancellable_new ();
 	fp_info ("PixelAuth: opt canceled\n");
 }
 

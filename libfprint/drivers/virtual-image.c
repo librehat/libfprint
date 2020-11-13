@@ -21,7 +21,7 @@
 /*
  * This is a virtual driver to debug the image based drivers. A small
  * python script is provided to connect to it via a socket, allowing
- * prints to be sent to this device programatically.
+ * prints to be sent to this device programmatically.
  * Using this it is possible to test libfprint and fprintd.
  */
 
@@ -252,6 +252,7 @@ dev_init (FpImageDevice *dev)
   g_autoptr(GSocketListener) listener = NULL;
   FpDeviceVirtualImage *self = FPI_DEVICE_VIRTUAL_IMAGE (dev);
   const char *env;
+
   g_autoptr(GSocketAddress) addr = NULL;
   G_DEBUG_HERE ();
 

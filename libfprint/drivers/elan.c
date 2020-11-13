@@ -207,6 +207,7 @@ elan_save_img_frame (FpiDeviceElan *elandev)
 
   unsigned int frame_size = elandev->frame_width * elandev->frame_height;
   unsigned short *frame = g_malloc (frame_size * sizeof (short));
+
   elan_save_frame (elandev, frame);
   unsigned int sum = 0;
 
@@ -244,6 +245,7 @@ elan_process_frame_linear (unsigned short *raw_frame,
   G_DEBUG_HERE ();
 
   unsigned short min = 0xffff, max = 0;
+
   for (int i = 0; i < frame_size; i++)
     {
       if (raw_frame[i] < min)
@@ -255,6 +257,7 @@ elan_process_frame_linear (unsigned short *raw_frame,
   g_assert (max != min);
 
   unsigned short px;
+
   for (int i = 0; i < frame_size; i++)
     {
       px = raw_frame[i];
@@ -278,6 +281,7 @@ elan_process_frame_thirds (unsigned short *raw_frame,
 
   unsigned short lvl0, lvl1, lvl2, lvl3;
   unsigned short *sorted = g_malloc (frame_size * sizeof (short));
+
   memcpy (sorted, raw_frame, frame_size * sizeof (short));
   qsort (sorted, frame_size, sizeof (short), cmp_short);
   lvl0 = sorted[0];
@@ -287,6 +291,7 @@ elan_process_frame_thirds (unsigned short *raw_frame,
   g_free (sorted);
 
   unsigned short px;
+
   for (int i = 0; i < frame_size; i++)
     {
       px = raw_frame[i];
@@ -320,6 +325,7 @@ elan_submit_image (FpImageDevice *dev)
   g_slist_foreach (raw_frames, (GFunc) self->process_frame, &frames);
   fpi_do_movement_estimation (&assembling_ctx, frames);
   img = fpi_assemble_frames (&assembling_ctx, frames);
+  img->flags |= FPI_IMAGE_PARTIAL;
 
   g_slist_free_full (frames, g_free);
 
@@ -509,6 +515,7 @@ elan_stop_capture (FpDevice *dev)
 
   FpiSsm *ssm =
     fpi_ssm_new (dev, stop_capture_run_state, STOP_CAPTURE_NUM_STATES);
+
   fpi_ssm_start (ssm, stop_capture_complete);
 }
 
@@ -619,6 +626,7 @@ elan_capture (FpDevice *dev)
   elan_dev_reset_state (self);
   FpiSsm *ssm =
     fpi_ssm_new (dev, capture_run_state, CAPTURE_NUM_STATES);
+
   fpi_ssm_start (ssm, capture_complete);
 }
 
@@ -733,7 +741,7 @@ calibrate_run_state (FpiSsm *ssm, FpDevice *dev)
           fp_dbg ("calibration failed");
           fpi_ssm_mark_failed (ssm,
                                fpi_device_error_new_msg (FP_DEVICE_ERROR_GENERAL,
-                                                         "Callibration failed!"));
+                                                         "Calibration failed!"));
         }
       break;
 
@@ -797,6 +805,7 @@ elan_calibrate (FpDevice *dev)
 
   FpiSsm *ssm = fpi_ssm_new (FP_DEVICE (dev), calibrate_run_state,
                              CALIBRATE_NUM_STATES);
+
   fpi_ssm_start (ssm, calibrate_complete);
 }
 
@@ -892,6 +901,7 @@ elan_activate (FpImageDevice *dev)
   FpiSsm *ssm =
     fpi_ssm_new (FP_DEVICE (dev), activate_run_state,
                  ACTIVATE_NUM_STATES);
+
   fpi_ssm_start (ssm, activate_complete);
 }
 
@@ -988,7 +998,7 @@ static void
 elan_change_state_async (FpDevice *dev,
                          void     *data)
 {
-  g_message ("state change dev: %p", dev);
+  fp_dbg ("state change dev: %p", dev);
   elan_change_state (FP_IMAGE_DEVICE (dev));
 }
 
@@ -1005,7 +1015,10 @@ dev_change_state (FpImageDevice *dev, FpiImageDeviceState state)
     state = FPI_IMAGE_DEVICE_STATE_INACTIVE;
 
   if (self->dev_state_next == state)
-    fp_dbg ("change to state %d already queued", state);
+    {
+      fp_dbg ("change to state %d already queued", state);
+      return;
+    }
 
   switch (state)
     {

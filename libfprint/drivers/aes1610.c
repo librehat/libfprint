@@ -138,7 +138,7 @@ generic_read_ignore_data (FpiSsm *ssm, FpDevice *dev,
   unsigned char *data;
 
   data = g_malloc (bytes);
-  fpi_usb_transfer_fill_bulk_full (transfer, EP_IN, data, bytes, NULL);
+  fpi_usb_transfer_fill_bulk_full (transfer, EP_IN, data, bytes, g_free);
   transfer->ssm = ssm;
   transfer->short_is_error = TRUE;
   fpi_usb_transfer_submit (transfer, BULK_TIMEOUT, NULL,
@@ -614,6 +614,7 @@ capture_read_strip_cb (FpiUsbTransfer *transfer, FpDevice *device,
       self->strips = g_slist_reverse (self->strips);
       fpi_do_movement_estimation (&assembling_ctx, self->strips);
       img = fpi_assemble_frames (&assembling_ctx, self->strips);
+      img->flags |= FPI_IMAGE_PARTIAL;
 
       g_slist_free_full (self->strips, g_free);
       self->strips = NULL;

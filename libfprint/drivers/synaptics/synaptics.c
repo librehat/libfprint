@@ -35,7 +35,7 @@ static const FpIdEntry id_table[] = {
 
 
 static void
-cmd_recieve_cb (FpiUsbTransfer *transfer,
+cmd_receive_cb (FpiUsbTransfer *transfer,
                 FpDevice       *device,
                 gpointer        user_data,
                 GError         *error)
@@ -234,7 +234,7 @@ synaptics_cmd_run_state (FpiSsm   *ssm,
       fpi_usb_transfer_submit (transfer,
                                5000,
                                NULL,
-                               cmd_recieve_cb,
+                               cmd_receive_cb,
                                fpi_ssm_get_data (ssm));
 
       break;
@@ -321,7 +321,7 @@ synaptics_sensor_cmd (FpiDeviceSynaptics *self,
   g_assert (payload || payload_len == 0);
 
   /* seq_num of 0 means a normal command, -1 means the current commands
-   * sequence number should not be udpated (i.e. second async command which
+   * sequence number should not be updated (i.e. second async command which
    * may only be a cancellation currently). */
   if (seq_num <= 0)
     {
@@ -515,39 +515,7 @@ list_msg_cb (FpiDeviceSynaptics *self,
           g_object_set (print, "fpi-data", data, NULL);
           g_object_set (print, "description", get_enroll_templates_resp->templates[n].user_id, NULL);
 
-          /* The format has 24 bytes at the start and some dashes in the right places */
-          if (g_str_has_prefix (userid, "FP1-") && strlen (userid) >= 24 &&
-              userid[12] == '-' && userid[14] == '-' && userid[23] == '-')
-            {
-              g_autofree gchar *copy = g_strdup (userid);
-              g_autoptr(GDate) date = NULL;
-              gint32 date_ymd;
-              gint32 finger;
-              gchar *username;
-              /* Try to parse information from the string. */
-
-              copy[12] = '\0';
-              date_ymd = g_ascii_strtod (copy + 4, NULL);
-              if (date_ymd > 0)
-                date = g_date_new_dmy (date_ymd % 100,
-                                       (date_ymd / 100) % 100,
-                                       date_ymd / 10000);
-              else
-                date = g_date_new ();
-
-              fp_print_set_enroll_date (print, date);
-
-              copy[14] = '\0';
-              finger = g_ascii_strtoll (copy + 13, NULL, 16);
-              fp_print_set_finger (print, finger);
-
-              /* We ignore the next chunk, it is just random data.
-               * Then comes the username; nobody is the default if the metadata
-               * is unknown */
-              username = copy + 24;
-              if (strlen (username) > 0 && g_strcmp0 (username, "nobody") != 0)
-                fp_print_set_username (print, username);
-            }
+          fpi_print_fill_from_user_id (print, userid);
 
           g_ptr_array_add (self->list_result, g_object_ref_sink (print));
         }
@@ -635,7 +603,7 @@ verify_msg_cb (FpiDeviceSynaptics *self,
       else if (resp->result == BMKT_FP_NO_MATCH)
         {
           fp_info ("Print didn't match");
-          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
+          fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, NULL);
           verify_complete_after_finger_removal (self);
         }
       else if (resp->result == BMKT_FP_DATABASE_NO_RECORD_EXISTS)
@@ -730,7 +698,7 @@ enroll_msg_cb (FpiDeviceSynaptics *self,
         if (enroll_resp->progress < 100)
           done_stages = MIN (done_stages, ENROLL_SAMPLES - 1);
 
-        /* Emit a retry error if there has been no discernable
+        /* Emit a retry error if there has been no discernible
          * progress. Some firmware revisions report more required
          * touches. */
         if (self->enroll_stage == done_stages)
@@ -795,8 +763,6 @@ enroll_msg_cb (FpiDeviceSynaptics *self,
     }
 }
 
-#define TEMPLATE_ID_SIZE 20
-
 static void
 enroll (FpDevice *device)
 {
@@ -804,52 +770,21 @@ enroll (FpDevice *device)
   FpPrint *print = NULL;
   GVariant *data = NULL;
   GVariant *uid = NULL;
-  const gchar *username;
   guint finger;
   g_autofree gchar *user_id = NULL;
   gssize user_id_len;
   g_autofree guint8 *payload = NULL;
-  const GDate *date;
-  gint y, m, d;
-  gint32 rand_id = 0;
 
   fpi_device_get_enroll_data (device, &print);
 
   G_DEBUG_HERE ();
 
-  date = fp_print_get_enroll_date (print);
-  if (date && g_date_valid (date))
-    {
-      y = g_date_get_year (date);
-      m = g_date_get_month (date);
-      d = g_date_get_day (date);
-    }
-  else
-    {
-      y = 0;
-      m = 0;
-      d = 0;
-    }
-
-  username = fp_print_get_username (print);
-  if (!username)
-    username = "nobody";
-
-  if (g_strcmp0 (g_getenv ("FP_DEVICE_EMULATION"), "1") == 0)
-    rand_id = 0;
-  else
-    rand_id = g_random_int ();
-
-  user_id = g_strdup_printf ("FP1-%04d%02d%02d-%X-%08X-%s",
-                             y, m, d,
-                             fp_print_get_finger (print),
-                             rand_id,
-                             username);
+  user_id = fpi_print_generate_user_id (print);
 
   user_id_len = strlen (user_id);
   user_id_len = MIN (BMKT_MAX_USER_ID_LEN, user_id_len);
 
-  /* We currently always use finger 1 from the devices piont of view */
+  /* We currently always use finger 1 from the devices point of view */
   finger = 1;
 
   uid = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE,
@@ -1029,7 +964,7 @@ dev_probe (FpDevice *device)
 
   if (!read_ok)
     {
-      g_warning ("Transfer in response to verison query was too short");
+      g_warning ("Transfer in response to version query was too short");
       error = fpi_device_error_new (FP_DEVICE_ERROR_PROTO);
       goto err_close;
     }

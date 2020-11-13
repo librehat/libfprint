@@ -541,6 +541,24 @@ test_driver_enroll_error_no_print (void)
   g_assert_true (error == g_steal_pointer (&fake_dev->ret_error));
   g_assert_null (out_print);
   g_assert_null (fake_dev->ret_print);
+  g_clear_error (&error);
+
+  g_test_expect_message (G_LOG_DOMAIN, G_LOG_LEVEL_WARNING,
+                         "*Driver did not set the type on the returned print*");
+
+  fake_dev->ret_error = NULL;
+  fake_dev->ret_print = fp_print_new (device); /* Type not set. */
+  g_object_add_weak_pointer (G_OBJECT (fake_dev->ret_print),
+                             (gpointer) (&fake_dev->ret_print));
+  out_print =
+    fp_device_enroll_sync (device, fp_print_new (device), NULL, NULL, NULL, &error);
+
+  g_test_assert_expected_messages ();
+  g_assert (fake_dev->last_called_function == dev_class->enroll);
+  g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);
+  g_assert_null (out_print);
+  g_assert_null (fake_dev->ret_print);
+  g_clear_error (&error);
 }
 
 typedef struct
@@ -635,7 +653,7 @@ test_driver_enroll_progress (void)
 {
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpAutoCloseDevice) device = NULL;
-  g_autoptr(FpPrint) enrolled_print = NULL;
+  G_GNUC_UNUSED g_autoptr(FpPrint) enrolled_print = NULL;
   ExpectedEnrollData expected_enroll_data = {0};
   FpiDeviceFake *fake_dev;
 
@@ -959,7 +977,7 @@ test_driver_verify_complete_retry (void)
 
   g_test_assert_expected_messages ();
   g_assert_true (error != g_steal_pointer (&fake_dev->ret_error));
-  g_assert_true (error != g_steal_pointer (&fake_dev->user_data));
+  g_steal_pointer (&fake_dev->user_data);
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);
   g_assert_true (match_data->called);
   g_assert_error (match_data->error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_TOO_SHORT);
@@ -981,7 +999,7 @@ test_driver_verify_complete_retry (void)
   g_test_assert_expected_messages ();
 
   g_assert_true (error != g_steal_pointer (&fake_dev->ret_error));
-  g_assert_true (error != g_steal_pointer (&fake_dev->user_data));
+  g_steal_pointer (&fake_dev->user_data);
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);
   g_assert_true (match_data->called);
   g_assert_error (match_data->error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_TOO_SHORT);
@@ -1001,7 +1019,7 @@ test_driver_verify_complete_retry (void)
   g_test_assert_expected_messages ();
 
   g_assert_true (error != g_steal_pointer (&fake_dev->ret_error));
-  g_assert_true (error != g_steal_pointer (&fake_dev->user_data));
+  g_steal_pointer (&fake_dev->user_data);
   g_assert_error (error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_GENERAL);
   g_assert_true (match_data->called);
   g_assert_error (match_data->error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_GENERAL);
@@ -1296,7 +1314,7 @@ test_driver_identify_complete_retry (void)
   g_test_assert_expected_messages ();
 
   g_assert_true (error != g_steal_pointer (&fake_dev->ret_error));
-  g_assert_true (error != g_steal_pointer (&fake_dev->user_data));
+  g_steal_pointer (&fake_dev->user_data);
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_GENERAL);
   g_assert_true (match_data->called);
   g_assert_error (match_data->error, FP_DEVICE_RETRY, FP_DEVICE_RETRY_TOO_SHORT);
@@ -1355,7 +1373,7 @@ test_driver_identify_report_no_callback (void)
   g_autoptr(MatchCbData) match_data = g_new0 (MatchCbData, 1);
   g_autoptr(GPtrArray) prints = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(FpAutoCloseDevice) device = NULL;
-  g_autoptr(FpPrint) enrolled_print = NULL;
+  G_GNUC_UNUSED g_autoptr(FpPrint) enrolled_print = NULL;
   g_autoptr(FpPrint) print = NULL;
   g_autoptr(FpPrint) match = NULL;
   g_autoptr(GError) error = NULL;
@@ -1493,6 +1511,7 @@ test_driver_list (void)
   g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
   FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
   g_autoptr(GPtrArray) prints = g_ptr_array_new_with_free_func (g_object_unref);
   unsigned int i;
 
@@ -1515,6 +1534,7 @@ test_driver_list_error (void)
   g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
   FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
   g_autoptr(GPtrArray) prints = NULL;
 
   fake_dev->ret_error = fpi_device_error_new (FP_DEVICE_ERROR_GENERAL);
@@ -1891,7 +1911,7 @@ test_driver_action_error_all (void)
   g_autoptr(GPtrArray) prints = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GError) error = NULL;
   FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
-  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  FpiDeviceFake *fake_dev;
 
   fake_dev = FPI_DEVICE_FAKE (device);
   fake_dev->return_action_error = TRUE;
@@ -1962,7 +1982,7 @@ test_driver_action_error_fallback_all (void)
   g_autoptr(GPtrArray) prints = g_ptr_array_new_with_free_func (g_object_unref);
   g_autoptr(GError) error = NULL;
   FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
-  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  FpiDeviceFake *fake_dev;
 
   fake_dev = FPI_DEVICE_FAKE (device);
   fake_dev->return_action_error = TRUE;

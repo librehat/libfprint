@@ -1,5 +1,6 @@
-libfprint (1:1.90.3-1) UNRELEASED; urgency=medium
+libfprint (1:1.90.3-1) unstable; urgency=medium
 
+  * Team upload.
   [ Marco Trevisan (Treviño) ]
   * New upstream release
     - Fixed crash in VFS0050 (LP: #1876502)
@@ -14,10 +15,11 @@ libfprint (1:1.90.3-1) UNRELEASED; urgency=medium
   [ Laurent Bigonville ]
   * New upstream release
 
- -- Laurent Bigonville <bigon@debian.org>  Sun, 15 Nov 2020 13:48:43 +0100
+ -- Laurent Bigonville <bigon@debian.org>  Sun, 15 Nov 2020 16:05:30 +0100
 
 libfprint (1:1.90.1-2) experimental; urgency=medium
 
+  * Team upload.
   [ Laurent Bigonville ]
   * debian/control: Add libcairo-dev and python3 to build-dependencies as they
     are explicitly required for some tests

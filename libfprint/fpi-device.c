@@ -135,6 +135,10 @@ fpi_device_error_new (FpDeviceError error)
       msg = "Print was not found on the devices storage.";
       break;
 
+    case FP_DEVICE_ERROR_DATA_DUPLICATE:
+      msg = "This finger has already enrolled, please try a different finger";
+      break;
+
     default:
       g_warning ("Unsupported error, returning general error instead!");
       error = FP_DEVICE_ERROR_GENERAL;
@@ -391,7 +395,7 @@ fpi_device_action_is_cancelled (FpDevice *device)
 
   cancellable = g_task_get_cancellable (priv->current_task);
 
-  return cancellable ? g_cancellable_is_cancelled (cancellable) : FALSE;
+  return g_cancellable_is_cancelled (cancellable);
 }
 
 /**
@@ -593,7 +597,11 @@ fpi_device_action_error (FpDevice *device,
 
   if (error != NULL)
     {
-      g_debug ("Device reported generic error during action; action was: %i", priv->current_action);
+      g_autofree char *action_str = NULL;
+
+      action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
+      g_debug ("Device reported generic error (%s) during action; action was: %s",
+               error->message, action_str);
     }
   else
     {
@@ -682,10 +690,13 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
 {
   FpDeviceTaskReturnData *data = user_data;
   FpDevicePrivate *priv = fp_device_get_instance_private (data->device);
+  g_autofree char *action_str = NULL;
 
   g_autoptr(GTask) task = NULL;
 
-  g_debug ("Completing action %d in idle!", priv->current_action);
+
+  action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
+  g_debug ("Completing action %s in idle!", action_str);
 
   task = g_steal_pointer (&priv->current_task);
   priv->current_action = FPI_DEVICE_ACTION_NONE;

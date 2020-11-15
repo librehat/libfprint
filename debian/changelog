@@ -1,5 +1,6 @@
-libfprint (1:1.90.2-1) UNRELEASED; urgency=medium
+libfprint (1:1.90.3-1) UNRELEASED; urgency=medium
 
+  [ Marco Trevisan (Treviño) ]
   * New upstream release
     - Fixed crash in VFS0050 (LP: #1876502)
     - Enrollment fails with UPEK reader (LP: #1881380)
@@ -10,7 +11,10 @@ libfprint (1:1.90.2-1) UNRELEASED; urgency=medium
   * d/p/git_reading_pointer.patch:
     - Dopped (applied upstream)
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 19 Jun 2020 16:00:27 +0200
+  [ Laurent Bigonville ]
+  * New upstream release
+
+ -- Laurent Bigonville <bigon@debian.org>  Sun, 15 Nov 2020 13:48:43 +0100
 
 libfprint (1:1.90.1-2) experimental; urgency=medium
 

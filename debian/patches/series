@@ -5,3 +5,5 @@ aes3k-Fix-transfer-error-path-and-cancellable-lifetime.patch
 tests-Add-AES3500-test-case.patch
 usb-transfer-Work-around-libgusb-cancellation-issue.patch
 aes3k-Re-send-some-commands-for-each-capture.patch
+synaptics-add-support-to-pid-0xF9-0xFC-0xC2.patch
+synaptics-Fix-missing-reference-to-interrupt-transfer.patch

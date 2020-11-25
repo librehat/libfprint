@@ -1,5 +1,3 @@
-# Debian specifics
-udev-rules-creation-add-Debian-specifics.patch
 image-device-Don-t-deactivate-if-deactivation-was-already.patch
 aes3k-Fix-transfer-error-path-and-cancellable-lifetime.patch
 tests-Add-AES3500-test-case.patch
@@ -14,3 +12,5 @@ udev-rules-Add-unsupported-devices-from-wiki-page-to-rule.patch
 udev-rules-Regenerate-from-wiki-to-include-VFS495.patch
 list-udev-rules-Remove-Wrongly-added-well-known-USB-contr.patch
 synaptics-add-identify-function.patch
+# Debian specifics
+udev-rules-creation-add-Debian-specifics.patch

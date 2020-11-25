@@ -10,7 +10,7 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/libfprint/+bug/1905603
  1 file changed, 1 insertion(+)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index a921776..6fbafe2 100644
+index bbca6ef..aee13e4 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
 @@ -59,6 +59,7 @@ static const FpIdEntry whitelist_id_table[] = {

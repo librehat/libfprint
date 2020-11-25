@@ -13,7 +13,7 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/libfprint/+bug/1905603
  1 file changed, 71 insertions(+), 3 deletions(-)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index 00bfa92..a921776 100644
+index 5f17b6b..bbca6ef 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
 @@ -25,11 +25,79 @@

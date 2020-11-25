@@ -3,7 +3,8 @@
 export DPKG_GENSYMBOLS_CHECK_LEVEL = 2
 
 # Configuration arguments
-CONFIG_ARGS = -Dudev_rules_dir=/lib/udev/rules.d -Dgtk-examples=false
+CONFIG_ARGS = -Dudev_rules_dir=/lib/udev/rules.d -Dgtk-examples=false \
+              -Ddrivers=all
 
 %:
 	dh $@ --with gir

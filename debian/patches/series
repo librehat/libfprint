@@ -1,2 +1,7 @@
 # Debian specifics
 udev-rules-creation-add-Debian-specifics.patch
+image-device-Don-t-deactivate-if-deactivation-was-already.patch
+aes3k-Fix-transfer-error-path-and-cancellable-lifetime.patch
+tests-Add-AES3500-test-case.patch
+usb-transfer-Work-around-libgusb-cancellation-issue.patch
+aes3k-Re-send-some-commands-for-each-capture.patch

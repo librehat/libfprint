@@ -1,4 +1,4 @@
-libfprint (1:1.90.3+tod1-0ubuntu2) UNRELEASED; urgency=medium
+libfprint (1:1.90.3+tod1-0ubuntu2) hirsute; urgency=medium
 
   * debian/gbp.conf: Include debian's GNOME team preferred settings
   * debian/patches (upstream cherry-picks):
@@ -10,7 +10,7 @@ libfprint (1:1.90.3+tod1-0ubuntu2) UNRELEASED; urgency=medium
     - Add identification support to synaptics driver.
       It allows to unlock / log-in with any finger. (LP: #1905600)
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 25 Nov 2020 19:15:34 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 25 Nov 2020 19:18:20 +0100
 
 libfprint (1:1.90.3+tod1-0ubuntu1) groovy; urgency=medium
 

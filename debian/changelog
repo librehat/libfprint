@@ -1,3 +1,17 @@
+libfprint (1:1.90.3+tod1-0ubuntu2) UNRELEASED; urgency=medium
+
+  * debian/gbp.conf: Include debian's GNOME team preferred settings
+  * debian/patches (upstream cherry-picks):
+    - Properly handle aes3k devices, resubmitting commands.
+      This also needs proper commands cancellation (LP: #1897613)
+    - Add support for new Synaptics devices IDs (LP: #1905593)
+    - Fix vfs301 verification using device pointer on callbacks (LP: #1905597)
+    - Ensure we do not waste power for unsupported devices (LP: #1905603)
+    - Add identification support to synaptics driver.
+      It allows to unlock / log-in with any finger. (LP: #1905600)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 25 Nov 2020 19:15:34 +0100
+
 libfprint (1:1.90.3+tod1-0ubuntu1) groovy; urgency=medium
 
   * New upstream release (LP: #1896861):

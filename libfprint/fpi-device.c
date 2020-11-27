@@ -139,6 +139,10 @@ fpi_device_error_new (FpDeviceError error)
       msg = "This finger has already enrolled, please try a different finger";
       break;
 
+    case FP_DEVICE_ERROR_REMOVED:
+      msg = "This device has been removed from the system.";
+      break;
+
     default:
       g_warning ("Unsupported error, returning general error instead!");
       error = FP_DEVICE_ERROR_GENERAL;
@@ -576,6 +580,49 @@ fpi_device_get_cancellable (FpDevice *device)
   return g_task_get_cancellable (priv->current_task);
 }
 
+static void
+emit_removed_on_task_completed (FpDevice *device)
+{
+  g_signal_emit_by_name (device, "removed");
+}
+
+/**
+ * fpi_device_remove:
+ * @device: The #FpDevice
+ *
+ * Called to signal to the #FpDevice that it has been unplugged (physically
+ * removed from the system).
+ *
+ * For USB devices, this API is called automatically by #FpContext.
+ */
+void
+fpi_device_remove (FpDevice *device)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+
+  g_return_if_fail (FP_IS_DEVICE (device));
+  g_return_if_fail (!priv->is_removed);
+
+  priv->is_removed = TRUE;
+
+  g_object_notify (G_OBJECT (device), "removed");
+
+  /* If there is a pending action, we wait for it to fail, otherwise we
+   * immediately emit the "removed" signal. */
+  if (priv->current_task)
+    {
+      g_signal_connect_object (priv->current_task,
+                               "notify::completed",
+                               (GCallback) emit_removed_on_task_completed,
+                               device,
+                               G_CONNECT_SWAPPED);
+    }
+  else
+    {
+      g_signal_emit_by_name (device, "removed");
+    }
+}
+
 /**
  * fpi_device_action_error:
  * @device: The #FpDevice
@@ -691,6 +738,7 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
   FpDeviceTaskReturnData *data = user_data;
   FpDevicePrivate *priv = fp_device_get_instance_private (data->device);
   g_autofree char *action_str = NULL;
+  FpiDeviceAction action;
 
   g_autoptr(GTask) task = NULL;
 
@@ -699,8 +747,23 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
   g_debug ("Completing action %s in idle!", action_str);
 
   task = g_steal_pointer (&priv->current_task);
+  action = priv->current_action;
   priv->current_action = FPI_DEVICE_ACTION_NONE;
   priv->current_task_idle_return_source = NULL;
+
+  /* Return FP_DEVICE_ERROR_REMOVED if the device is removed,
+   * with the exception of a successful open, which is an odd corner case. */
+  if (priv->is_removed &&
+      ((action != FPI_DEVICE_ACTION_OPEN) ||
+       (action == FPI_DEVICE_ACTION_OPEN && data->type == FP_DEVICE_TASK_RETURN_ERROR)))
+    {
+      g_task_return_error (task, fpi_device_error_new (FP_DEVICE_ERROR_REMOVED));
+
+      /* NOTE: The removed signal will be emitted from the GTask
+       *       notify::completed if that is neccessary. */
+
+      return G_SOURCE_REMOVE;
+    }
 
   switch (data->type)
     {
@@ -713,16 +776,17 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
       break;
 
     case FP_DEVICE_TASK_RETURN_OBJECT:
-      g_task_return_pointer (task, data->result, g_object_unref);
+      g_task_return_pointer (task, g_steal_pointer (&data->result),
+                             g_object_unref);
       break;
 
     case FP_DEVICE_TASK_RETURN_PTR_ARRAY:
-      g_task_return_pointer (task, data->result,
+      g_task_return_pointer (task, g_steal_pointer (&data->result),
                              (GDestroyNotify) g_ptr_array_unref);
       break;
 
     case FP_DEVICE_TASK_RETURN_ERROR:
-      g_task_return_error (task, data->result);
+      g_task_return_error (task, g_steal_pointer (&data->result));
       break;
 
     default:
@@ -735,6 +799,30 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
 static void
 fpi_device_task_return_data_free (FpDeviceTaskReturnData *data)
 {
+  if (data->result)
+    {
+      switch (data->type)
+        {
+        case FP_DEVICE_TASK_RETURN_INT:
+        case FP_DEVICE_TASK_RETURN_BOOL:
+          break;
+
+        case FP_DEVICE_TASK_RETURN_OBJECT:
+          g_clear_object ((GObject **) &data->result);
+          break;
+
+        case FP_DEVICE_TASK_RETURN_PTR_ARRAY:
+          g_clear_pointer ((GPtrArray **) &data->result, g_ptr_array_unref);
+          break;
+
+        case FP_DEVICE_TASK_RETURN_ERROR:
+          g_clear_error ((GError **) &data->result);
+          break;
+
+        default:
+          g_assert_not_reached ();
+        }
+    }
   g_object_unref (data->device);
   g_free (data);
 }
@@ -787,6 +875,7 @@ fpi_device_probe_complete (FpDevice    *device,
   g_debug ("Device reported probe completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
@@ -829,6 +918,7 @@ fpi_device_open_complete (FpDevice *device, GError *error)
   g_debug ("Device reported open completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
@@ -862,6 +952,7 @@ fpi_device_close_complete (FpDevice *device, GError *error)
   g_debug ("Device reported close completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   switch (priv->type)
     {
@@ -885,17 +976,17 @@ fpi_device_close_complete (FpDevice *device, GError *error)
       return;
     }
 
+  /* Always consider the device closed. Drivers should try hard to close the
+   * device. Generally, e.g. cancellations should be ignored.
+   */
+  priv->is_open = FALSE;
+  g_object_notify (G_OBJECT (device), "open");
+
   if (!error)
-    {
-      priv->is_open = FALSE;
-      g_object_notify (G_OBJECT (device), "open");
-      fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_BOOL,
-                                      GUINT_TO_POINTER (TRUE));
-    }
+    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_BOOL,
+                                    GUINT_TO_POINTER (TRUE));
   else
-    {
-      fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
-    }
+    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
 }
 
 /**
@@ -918,12 +1009,14 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
   g_debug ("Device reported enroll completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
       if (FP_IS_PRINT (print))
         {
           FpiPrintType print_type;
+          g_autofree char *finger_str = NULL;
 
           g_object_get (print, "fpi-type", &print_type, NULL);
           if (print_type == FPI_PRINT_UNDEFINED)
@@ -936,6 +1029,9 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
               fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
               return;
             }
+
+          finger_str = g_enum_to_string (FP_TYPE_FINGER, fp_print_get_finger (print));
+          g_debug ("Print for finger %s enrolled", finger_str);
 
           fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_OBJECT, print);
         }
@@ -985,6 +1081,7 @@ fpi_device_verify_complete (FpDevice *device,
   data = g_task_get_task_data (priv->current_task);
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
@@ -1044,6 +1141,7 @@ fpi_device_identify_complete (FpDevice *device,
   data = g_task_get_task_data (priv->current_task);
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
@@ -1100,6 +1198,7 @@ fpi_device_capture_complete (FpDevice *device,
   g_debug ("Device reported capture completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     {
@@ -1145,6 +1244,7 @@ fpi_device_delete_complete (FpDevice *device,
   g_debug ("Device reported deletion completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
     fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_BOOL,
@@ -1179,6 +1279,7 @@ fpi_device_list_complete (FpDevice  *device,
   g_debug ("Device reported listing completion");
 
   clear_device_cancel_action (device);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (prints && error)
     {
@@ -1393,4 +1494,60 @@ fpi_device_identify_report (FpDevice *device,
 
   if (call_cb && data->match_cb)
     data->match_cb (device, data->match, data->print, data->match_data, data->error);
+}
+
+/**
+ * fpi_device_report_finger_status:
+ * @device: The #FpDevice
+ * @finger_status: The current #FpFingerStatusFlags to report
+ *
+ * Report the finger status for the @device.
+ * This can be used by UI to give a feedback
+ *
+ * Returns: %TRUE if changed
+ */
+gboolean
+fpi_device_report_finger_status (FpDevice           *device,
+                                 FpFingerStatusFlags finger_status)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+  g_autofree char *status_string = NULL;
+
+  if (priv->finger_status == finger_status)
+    return FALSE;
+
+  status_string = g_flags_to_string (FP_TYPE_FINGER_STATUS_FLAGS, finger_status);
+  fp_dbg ("Device reported finger status change: %s", status_string);
+
+  priv->finger_status = finger_status;
+  g_object_notify (G_OBJECT (device), "finger-status");
+
+  return TRUE;
+}
+
+/**
+ * fpi_device_report_finger_status_changes:
+ * @device: The #FpDevice
+ * @added_status: The #FpFingerStatusFlags to add
+ * @added_status: The #FpFingerStatusFlags to remove
+ *
+ * Report the finger status for the @device adding the @added_status flags
+ * and removing the @removed_status flags.
+ *
+ * This can be used by UI to give a feedback
+ *
+ * Returns: %TRUE if changed
+ */
+gboolean
+fpi_device_report_finger_status_changes (FpDevice           *device,
+                                         FpFingerStatusFlags added_status,
+                                         FpFingerStatusFlags removed_status)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+  FpFingerStatusFlags finger_status = priv->finger_status;
+
+  finger_status |= added_status;
+  finger_status &= ~removed_status;
+
+  return fpi_device_report_finger_status (device, finger_status);
 }

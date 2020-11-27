@@ -44,8 +44,10 @@ enum {
   PROP_DEVICE_ID,
   PROP_NAME,
   PROP_OPEN,
+  PROP_REMOVED,
   PROP_NR_ENROLL_STAGES,
   PROP_SCAN_TYPE,
+  PROP_FINGER_STATUS,
   PROP_FPI_ENVIRON,
   PROP_FPI_USB_DEVICE,
   PROP_FPI_DRIVER_DATA,
@@ -53,6 +55,13 @@ enum {
 };
 
 static GParamSpec *properties[N_PROPS];
+
+enum {
+  REMOVED_SIGNAL,
+  N_SIGNALS
+};
+
+static guint signals[N_SIGNALS] = { 0, };
 
 /**
  * fp_device_retry_quark:
@@ -83,6 +92,8 @@ fp_device_cancel_in_idle_cb (gpointer user_data)
   priv->current_idle_cancel_source = NULL;
 
   cls->cancel (self);
+
+  fpi_device_report_finger_status (self, FP_FINGER_STATUS_NONE);
 
   return G_SOURCE_REMOVE;
 }
@@ -181,6 +192,10 @@ fp_device_get_property (GObject    *object,
       g_value_set_enum (value, priv->scan_type);
       break;
 
+    case PROP_FINGER_STATUS:
+      g_value_set_enum (value, priv->finger_status);
+      break;
+
     case PROP_DRIVER:
       g_value_set_static_string (value, FP_DEVICE_GET_CLASS (priv)->id);
       break;
@@ -195,6 +210,10 @@ fp_device_get_property (GObject    *object,
 
     case PROP_OPEN:
       g_value_set_boolean (value, priv->is_open);
+      break;
+
+    case PROP_REMOVED:
+      g_value_set_boolean (value, priv->is_removed);
       break;
 
     default:
@@ -310,6 +329,13 @@ fp_device_class_init (FpDeviceClass *klass)
                        FP_TYPE_SCAN_TYPE, FP_SCAN_TYPE_SWIPE,
                        G_PARAM_STATIC_STRINGS | G_PARAM_READABLE);
 
+  properties[PROP_FINGER_STATUS] =
+    g_param_spec_flags ("finger-status",
+                        "FingerStatus",
+                        "The status of the finger",
+                        FP_TYPE_FINGER_STATUS_FLAGS, FP_FINGER_STATUS_NONE,
+                        G_PARAM_STATIC_STRINGS | G_PARAM_READABLE);
+
   properties[PROP_DRIVER] =
     g_param_spec_string ("driver",
                          "Driver",
@@ -336,6 +362,41 @@ fp_device_class_init (FpDeviceClass *klass)
                           "Opened",
                           "Whether the device is open or not", FALSE,
                           G_PARAM_STATIC_STRINGS | G_PARAM_READABLE);
+
+  properties[PROP_REMOVED] =
+    g_param_spec_boolean ("removed",
+                          "Removed",
+                          "Whether the device has been removed from the system", FALSE,
+                          G_PARAM_STATIC_STRINGS | G_PARAM_READABLE);
+
+  /**
+   * FpDevice::removed:
+   * @device: the #FpDevice instance that emitted the signal
+   *
+   * This signal is emitted after the device has been removed and no operation
+   * is pending anymore.
+   *
+   * The API user is still required to close a removed device. The above
+   * guarantee means that the call to close the device can be made immediately
+   * from the signal handler.
+   *
+   * The close operation will return FP_DEVICE_ERROR_REMOVED, but the device
+   * will still be considered closed afterwards.
+   *
+   * The device will only be removed from the #FpContext after it has been
+   * closed by the API user.
+   **/
+  signals[REMOVED_SIGNAL] = g_signal_new ("removed",
+                                          G_TYPE_FROM_CLASS (klass),
+                                          G_SIGNAL_RUN_LAST,
+                                          0,
+                                          NULL,
+                                          NULL,
+                                          g_cclosure_marshal_VOID__VOID,
+                                          G_TYPE_NONE,
+                                          0);
+
+  /* Private properties */
 
   /**
    * FpDevice::fpi-environ: (skip)
@@ -467,6 +528,26 @@ fp_device_get_scan_type (FpDevice *device)
   g_return_val_if_fail (FP_IS_DEVICE (device), FP_SCAN_TYPE_SWIPE);
 
   return priv->scan_type;
+}
+
+/**
+ * fp_device_get_finger_status:
+ * @device: A #FpDevice
+ *
+ * Retrieves the finger status flags for the device.
+ * This can be used by the UI to present the relevant feedback, although it
+ * is not guaranteed to be a relevant value when not performing any action.
+ *
+ * Returns: The current #FpFingerStatusFlags
+ */
+FpFingerStatusFlags
+fp_device_get_finger_status (FpDevice *device)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+
+  g_return_val_if_fail (FP_IS_DEVICE (device), FP_SCAN_TYPE_SWIPE);
+
+  return priv->finger_status;
 }
 
 /**
@@ -603,6 +684,7 @@ fp_device_open (FpDevice           *device,
   priv->current_action = FPI_DEVICE_ACTION_OPEN;
   priv->current_task = g_steal_pointer (&task);
   maybe_cancel_on_cancelled (device, cancellable);
+  fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   FP_DEVICE_GET_CLASS (device)->open (device);
 }

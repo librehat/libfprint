@@ -29,6 +29,7 @@ typedef struct
   GUsbDevice  *usb_device;
   const gchar *virtual_env;
 
+  gboolean     is_removed;
   gboolean     is_open;
 
   gchar       *device_id;
@@ -49,7 +50,8 @@ typedef struct
   GSource            *current_task_idle_return_source;
 
   /* State for tasks */
-  gboolean wait_for_finger;
+  gboolean            wait_for_finger;
+  FpFingerStatusFlags finger_status;
 } FpDevicePrivate;
 
 

@@ -1,3 +1,25 @@
+libfprint (1:1.90.4-1) UNRELEASED; urgency=medium
+
+  * New upstream release:
+    - Work around GUsb cancellation issue
+    - Redefine internal image device state machine for more robustness
+    - Add public finger-status reporting to FpDevice
+    - Rework device removal API to be convenient
+    - Enable powersave for unsupported USB devices (LP: #1905603)
+    - Improvements to examples
+    - synaptics: Support identify operation (LP: #1905600)
+    - synaptics: Fix possible crash when the interrupt transfer is resubmitted
+    - synaptics: Add support for PIDs 0x00f9, 0x00fc and 0x00c2
+    - elan: Add PID 0x0c4d to supported device list
+    - aes3k: Fix driver and add CI test (LP: #1897613)
+    - uru4000: Fix reference counting of image transfer
+    - vfs301: Fix driver and add CI test (LP: #1905597, Closes: #951648)
+  * debian/libfprint-2-2.symbols: Add new symbols
+  * debian/rules: Also build the virtual drivers, as they're useful for
+    testing libfprint and fprintd
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 27 Nov 2020 16:29:46 +0100
+
 libfprint (1:1.90.3-1) unstable; urgency=medium
 
   * Team upload.

@@ -121,7 +121,7 @@ img_cb (FpiUsbTransfer *transfer, FpDevice *device,
 
   /* FIXME: this is an ugly hack to make the image big enough for NBIS
    * to process reliably */
-  img = fpi_image_resize (tmp, cls->enlarge_factor, cls->enlarge_factor);
+  img = fpi_image_resize (tmp, cls->enlarge_factor, cls->enlarge_factor, FALSE);
   g_object_unref (tmp);
   fpi_image_device_image_captured (dev, img);
 

@@ -111,13 +111,23 @@ fpi_mean_sq_diff_norm (const guint8 *buf1,
 FpImage *
 fpi_image_resize (FpImage *orig_img,
                   guint    w_factor,
-                  guint    h_factor)
+                  guint    h_factor,
+                  gboolean enhance)
 {
   int new_width = orig_img->width * w_factor;
   int new_height = orig_img->height * h_factor;
-  pixman_image_t *orig, *resized;
+  pixman_image_t *orig, *resized, *enhanced;
   pixman_transform_t transform;
   FpImage *newimg;
+
+  static const pixman_fixed_t kernel[] = {
+    #define D(f)        (pixman_double_to_fixed (f) + 0x0001)
+    pixman_int_to_fixed (3),
+    pixman_int_to_fixed (3),
+    D (-1.0), D (-2.0), D (-1.0),
+    D (-2.0), D (13.0), D (-2.0),
+    D (-1.0), D (-2.0), D (-1.0),
+  };
 
   orig = pixman_image_create_bits (PIXMAN_a8, orig_img->width, orig_img->height, (uint32_t *) orig_img->data, orig_img->width);
   resized = pixman_image_create_bits (PIXMAN_a8, new_width, new_height, NULL, new_width);
@@ -135,6 +145,26 @@ fpi_image_resize (FpImage *orig_img,
                             0, 0, /* dst x y */
                             new_width, new_height /* width height */
                            );
+
+  if (enhance)
+    {
+      enhanced = pixman_image_create_bits (PIXMAN_a8, new_width, new_height, NULL, new_width);
+      pixman_transform_init_identity (&transform);
+      pixman_image_set_transform (resized, &transform);
+      pixman_image_set_filter (resized, PIXMAN_FILTER_CONVOLUTION, kernel, 11);
+
+      pixman_image_composite32 (PIXMAN_OP_SRC,
+                                resized, /* src */
+                                NULL, /* mask */
+                                enhanced, /* dst */
+                                0, 0, /* src x y */
+                                0, 0, /* mask x y */
+                                0, 0, /* dst x y */
+                                new_width, new_height /* width height */
+                               );
+      pixman_image_unref (resized);
+      resized = enhanced;
+    }
 
   newimg = fp_image_new (new_width, new_height);
   newimg->flags = orig_img->flags;

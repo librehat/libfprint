@@ -150,7 +150,10 @@ foreach driver: drivers
         drivers_sources += [ 'drivers/vfs0050.c' ]
     endif
     if driver == 'elan'
-        drivers_sources += [ 'drivers/elan.c' ]
+        drivers_sources += [ 'drivers/elan.c', 'drivers/elan_touch.c' ]
+    endif
+    if driver == 'elan_touch'
+        drivers_sources += [ 'drivers/elan_touch.c' ]
     endif
     if driver == 'virtual_image'
         drivers_sources += [ 'drivers/virtual-image.c' ]

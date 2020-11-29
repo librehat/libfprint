@@ -106,6 +106,7 @@ default_drivers = [
     'vcom5s',
     'synaptics',
     'elan',
+    'elan_touch',
     'uru4000',
     'upektc',
     'upeksonly',
@@ -137,7 +138,7 @@ foreach driver: drivers
             error('NSS is required for the URU4000/URU4500 driver')
         endif
     endif
-    if driver == 'aes3500' or driver == 'aes4000'
+    if driver == 'aes3500' or driver == 'aes4000' or driver == 'elan_touch'
         imaging_dep = dependency('pixman-1', required: false)
         if not imaging_dep.found()
             error('pixman is required for imaging support')

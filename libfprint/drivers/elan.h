@@ -44,14 +44,17 @@
 
 /* times to retry reading calibration status during one session
  * generally prevents calibration from looping indefinitely */
-#define ELAN_CALIBRATION_ATTEMPTS 10
+#define ELAN_CALIBRATION_ATTEMPTS 50
 
 /* min and max frames in a capture */
 #define ELAN_MIN_FRAMES 7
 #define ELAN_MAX_FRAMES 30
+#define ELAN_TOUCH_MIN_FRAMES 2
+#define ELAN_TOUCH_MAX_FRAMES 8
 
 /* crop frames to this height to improve stitching */
 #define ELAN_MAX_FRAME_HEIGHT 50
+#define ELAN_TOUCH_MAX_FRAME_HEIGHT 96
 
 /* number of frames to drop at the end of capture because frames captured
  * while the finger is being lifted can be bad */
@@ -70,8 +73,49 @@
 #define ELAN_CMD_TIMEOUT 10000
 #define ELAN_FINGER_TIMEOUT 200
 
-G_DECLARE_FINAL_TYPE (FpiDeviceElan, fpi_device_elan, FPI, DEVICE_ELAN,
-                      FpImageDevice);
+G_DECLARE_DERIVABLE_TYPE (FpiDeviceElan, fpi_device_elan, FPI, DEVICE_ELAN,
+                          FpImageDevice);
+
+#define FPI_TYPE_DEVICE_ELAN (fpi_device_elan_get_type ())
+
+struct _FpiDeviceElanClass
+{
+  FpImageDeviceClass parent;
+
+  /* device config */
+  unsigned short dev_type;
+  unsigned short fw_ver;
+  void           (*process_frame) (unsigned short *raw_frame,
+                                   GSList       ** frames);
+  /* end device config */
+
+  /* commands */
+  const struct elan_cmd *cmd;
+  int                    cmd_timeout;
+  /* end commands */
+
+  /* state */
+  gboolean        active;
+  gboolean        deactivating;
+  unsigned char  *last_read;
+  unsigned char   calib_atts_left;
+  unsigned char   calib_status;
+  unsigned short *background;
+  unsigned char   frame_width;
+  unsigned char   frame_height;
+  unsigned char   raw_frame_height;
+  int             num_frames;
+  GSList         *frames;
+  unsigned int    max_frame_height;
+  unsigned int    min_frames;
+  unsigned int    max_frames;
+  void            (*submit_image) (FpImageDevice *dev);
+  FpImage       * (*assemble_image) (FpiDeviceElanClass *self,
+                                     GSList             *raw_frames,
+                                     unsigned int        image_width);
+
+  /* end state */
+};
 
 struct elan_cmd
 {
@@ -201,7 +245,7 @@ static const FpIdEntry elan_id_table[] = {
   {.vid = ELAN_VEND_ID,  .pid = 0x0c25, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c26, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c27, .driver_data = ELAN_ALL_DEV},
-  {.vid = ELAN_VEND_ID,  .pid = 0x0c28, .driver_data = ELAN_ALL_DEV},
+//  {.vid = ELAN_VEND_ID,  .pid = 0x0c28, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c29, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c2a, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c2b, .driver_data = ELAN_ALL_DEV},
@@ -217,13 +261,3 @@ static const FpIdEntry elan_id_table[] = {
   {.vid = ELAN_VEND_ID,  .pid = 0x0c4d, .driver_data = ELAN_ALL_DEV},
   {.vid = 0,  .pid = 0,  .driver_data = 0},
 };
-
-static void elan_cmd_done (FpiSsm *ssm);
-static void elan_cmd_read (FpiSsm   *ssm,
-                           FpDevice *dev);
-
-static void elan_calibrate (FpiDeviceElan *self);
-static void elan_capture (FpiDeviceElan *self);
-
-static void dev_change_state (FpImageDevice      *dev,
-                              FpiImageDeviceState state);

@@ -1,3 +1,11 @@
+libfprint (1:1.90.3+tod1-0ubuntu3) UNRELEASED; urgency=medium
+
+  * debian/patches:
+    - Reorder to give upstream more priority
+    - Don't use power-save mode for USB controller (LP: #1906296)
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Mon, 30 Nov 2020 20:22:09 +0100
+
 libfprint (1:1.90.3+tod1-0ubuntu2) hirsute; urgency=medium
 
   * debian/gbp.conf: Include debian's GNOME team preferred settings

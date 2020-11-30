@@ -12,4 +12,5 @@ vfs301-Start-capture-only-on-state-change-to-AWAIT_FINGER.patch
 tests-Add-a-new-test-for-vfs301.patch
 udev-rules-Add-unsupported-devices-from-wiki-page-to-rule.patch
 udev-rules-Regenerate-from-wiki-to-include-VFS495.patch
+list-udev-rules-Remove-Wrongly-added-well-known-USB-contr.patch
 synaptics-add-identify-function.patch

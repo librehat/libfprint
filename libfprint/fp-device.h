@@ -91,6 +91,7 @@ typedef enum {
  * @FP_DEVICE_ERROR_DATA_NOT_FOUND: Requested print was not found on device
  * @FP_DEVICE_ERROR_DATA_FULL: No space on device available for operation
  * @FP_DEVICE_ERROR_DATA_DUPLICATE: Enrolling template duplicates storaged templates
+ * @FP_DEVICE_ERROR_REMOVED: The device has been removed.
  *
  * Error codes for device operations. More specific errors from other domains
  * such as #G_IO_ERROR or #G_USB_DEVICE_ERROR may also be reported.
@@ -106,6 +107,8 @@ typedef enum {
   FP_DEVICE_ERROR_DATA_NOT_FOUND,
   FP_DEVICE_ERROR_DATA_FULL,
   FP_DEVICE_ERROR_DATA_DUPLICATE,
+  /* Leave some room to add more DATA related errors */
+  FP_DEVICE_ERROR_REMOVED = 0x100,
 } FpDeviceError;
 
 GQuark fp_device_retry_quark (void);
@@ -170,6 +173,7 @@ const gchar *fp_device_get_device_id (FpDevice *device);
 const gchar *fp_device_get_name (FpDevice *device);
 gboolean     fp_device_is_open (FpDevice *device);
 FpScanType   fp_device_get_scan_type (FpDevice *device);
+FpFingerStatusFlags fp_device_get_finger_status (FpDevice *device);
 gint         fp_device_get_nr_enroll_stages (FpDevice *device);
 
 gboolean     fp_device_supports_identify (FpDevice *device);

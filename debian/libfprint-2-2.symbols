@@ -21,6 +21,7 @@ libfprint-2.so.2 libfprint-2-2 #MINVER#
  fp_device_error_quark@LIBFPRINT_2.0.0 1:1.90.1
  fp_device_get_device_id@LIBFPRINT_2.0.0 1:1.90.1
  fp_device_get_driver@LIBFPRINT_2.0.0 1:1.90.1
+ fp_device_get_finger_status@LIBFPRINT_2.0.0 1:1.90.4
  fp_device_get_name@LIBFPRINT_2.0.0 1:1.90.1
  fp_device_get_nr_enroll_stages@LIBFPRINT_2.0.0 1:1.90.1
  fp_device_get_scan_type@LIBFPRINT_2.0.0 1:1.90.1
@@ -45,6 +46,7 @@ libfprint-2.so.2 libfprint-2-2 #MINVER#
  fp_device_verify_finish@LIBFPRINT_2.0.0 1:1.90.1
  fp_device_verify_sync@LIBFPRINT_2.0.0 1:1.90.1
  fp_finger_get_type@LIBFPRINT_2.0.0 1:1.90.1
+ fp_finger_status_flags_get_type@LIBFPRINT_2.0.0 1:1.90.4
  fp_image_detect_minutiae@LIBFPRINT_2.0.0 1:1.90.1
  fp_image_detect_minutiae_finish@LIBFPRINT_2.0.0 1:1.90.1
  fp_image_device_get_type@LIBFPRINT_2.0.0 1:1.90.1

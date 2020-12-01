@@ -1,5 +1,7 @@
-libfprint (1:1.90.4-1) UNRELEASED; urgency=medium
+libfprint (1:1.90.4-1) unstable; urgency=medium
 
+  * Team upload.
+  [ Marco Trevisan (Treviño) ]
   * New upstream release:
     - Work around GUsb cancellation issue
     - Redefine internal image device state machine for more robustness
@@ -18,7 +20,10 @@ libfprint (1:1.90.4-1) UNRELEASED; urgency=medium
   * debian/rules: Also build the virtual drivers, as they're useful for
     testing libfprint and fprintd
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 27 Nov 2020 16:29:46 +0100
+  [ Laurent Bigonville ]
+  * debian/control: Bump Standards-Version to 4.5.1 (no further changes)
+
+ -- Laurent Bigonville <bigon@debian.org>  Tue, 01 Dec 2020 11:36:08 +0100
 
 libfprint (1:1.90.3-1) unstable; urgency=medium
 

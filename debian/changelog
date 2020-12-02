@@ -1,3 +1,15 @@
+libfprint (1:1.90.5-2) UNRELEASED; urgency=medium
+
+  * d/p/fpi-device-Return-proper-type-on-identification-success.patch,
+    d/p/test-fpi-device-Always-check-the-return-values-for-the-AP.patch:
+    - Properly handle identify return value and add tests.
+      This fixes fprintd test failures in s390x
+  * d/p/fp-print-Don-t-byte-swap-two-times-the-NBIS-array-content.patch:
+    - Fixes virtual-image test in libfprint for s390x
+  * debian/control: Add myself to Uploaders
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 02 Dec 2020 17:49:11 +0100
+
 libfprint (1:1.90.5-1) unstable; urgency=medium
 
   * New upstream release:

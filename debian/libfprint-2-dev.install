@@ -1,4 +1,4 @@
-usr/include/*
-usr/lib/*/lib*.so
-usr/lib/*/pkgconfig/*
-usr/share/gir-1.0/*
+usr/include/libfprint-*
+usr/lib/${DEB_HOST_MULTIARCH}/libfprint-*.so
+usr/lib/${DEB_HOST_MULTIARCH}/pkgconfig/libfprint-*.pc
+usr/share/gir-1.0/FPrint-*.gir

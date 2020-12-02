@@ -1,11 +1,11 @@
-libfprint (1:1.90.5-1) UNRELEASED; urgency=medium
+libfprint (1:1.90.5-1) unstable; urgency=medium
 
   * New upstream release:
     - Remove USB hub from udev autosupend rules
     - synaptics: Add PID 0x00c9 which is used in some HP laptops
   * debian/patches: Use gbp pq topics for debian-specific patches
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 02 Dec 2020 05:07:11 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Wed, 02 Dec 2020 05:11:33 +0100
 
 libfprint (1:1.90.4-1) unstable; urgency=medium
 

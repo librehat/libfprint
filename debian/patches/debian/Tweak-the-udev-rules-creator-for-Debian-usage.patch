@@ -1,12 +1,14 @@
 From: Didier Raboud <odyx@debian.org>
-Date: Wed, 25 Nov 2020 15:45:56 +0100
+Date: Wed, 2 Dec 2020 04:57:32 +0100
 Subject: Tweak the udev rules creator for Debian usage
-
-Origin: vendor
-Last-Update: 2020-01-10
 
 List all devices; automatic power/control only for the non-blacklisted
 ones; mode and group to all.
+
+Author: Didier Raboud <odyx@debian.org>
+Author: Sebastien Bacher <seb128@ubuntu.com>
+Origin: vendor
+Last-Update: 2020-01-10
 ---
  libfprint/fprint-list-udev-rules.c | 9 ++++-----
  1 file changed, 4 insertions(+), 5 deletions(-)

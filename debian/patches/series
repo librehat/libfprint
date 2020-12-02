@@ -1,2 +1,1 @@
-# Debian specifics
-udev-rules-creation-add-Debian-specifics.patch
+debian/Tweak-the-udev-rules-creator-for-Debian-usage.patch

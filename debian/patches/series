@@ -1,1 +1,3 @@
 debian/Tweak-the-udev-rules-creator-for-Debian-usage.patch
+fpi-device-Return-proper-type-on-identification-success.patch
+test-fpi-device-Always-check-the-return-values-for-the-AP.patch

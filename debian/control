@@ -2,7 +2,8 @@ Source: libfprint
 Priority: optional
 Section: libs
 Maintainer: FingerForce Team <fingerforce-devel@lists.alioth.debian.org>
-Uploaders: Ulises Vitulli <dererk@debian.org>, Didier Raboud <odyx@debian.org>
+Uploaders: Ulises Vitulli <dererk@debian.org>, Didier Raboud <odyx@debian.org>,
+           Marco Trevisan <marco@ubuntu.com>
 Build-Depends: debhelper-compat (= 12),
                gobject-introspection,
                gtk-doc-tools,

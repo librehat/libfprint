@@ -18,6 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fp-print.h"
 #define FP_COMPONENT "device"
 #include "fpi-log.h"
 
@@ -156,7 +157,7 @@ fp_device_finalize (GObject *object)
 
   g_assert (priv->current_action == FPI_DEVICE_ACTION_NONE);
   g_assert (priv->current_task == NULL);
-  if (priv->is_open)
+  if (priv->state_flags & FPI_DEVICE_STATE_OPEN)
     g_warning ("User destroyed open device! Not cleaning up properly!");
 
   g_slist_free_full (priv->sources, (GDestroyNotify) g_source_destroy);
@@ -193,7 +194,7 @@ fp_device_get_property (GObject    *object,
       break;
 
     case PROP_FINGER_STATUS:
-      g_value_set_flags (value, priv->finger_status);
+      g_value_set_flags (value, priv->);
       break;
 
     case PROP_DRIVER:
@@ -209,11 +210,11 @@ fp_device_get_property (GObject    *object,
       break;
 
     case PROP_OPEN:
-      g_value_set_boolean (value, priv->is_open);
+      g_value_set_boolean (value, (priv->state_flags & FPI_DEVICE_STATE_OPEN));
       break;
 
     case PROP_REMOVED:
-      g_value_set_boolean (value, priv->is_removed);
+      g_value_set_boolean (value, (priv->state_flags & FPI_DEVICE_STATE_REMOVED));
       break;
 
     default:
@@ -269,7 +270,7 @@ fp_device_async_initable_init_async (GAsyncInitable     *initable,
   FpDevicePrivate *priv = fp_device_get_instance_private (self);
 
   /* It is next to impossible to call async_init at the wrong time. */
-  g_assert (!priv->is_open);
+  g_assert (!(priv->state_flags & FPI_DEVICE_STATE_OPEN));
   g_assert (!priv->current_task);
 
   task = g_task_new (self, cancellable, callback, user_data);
@@ -509,7 +510,7 @@ fp_device_is_open (FpDevice *device)
 
   g_return_val_if_fail (FP_IS_DEVICE (device), FALSE);
 
-  return priv->is_open;
+  return (priv->state_flags & FPI_DEVICE_STATE_OPEN);
 }
 
 /**
@@ -543,9 +544,12 @@ fp_device_get_scan_type (FpDevice *device)
 FpFingerStatusFlags
 fp_device_get_finger_status (FpDevice *device)
 {
+  FpFingerStatusFlags finger_status;
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
-  g_return_val_if_fail (FP_IS_DEVICE (device), FP_SCAN_TYPE_SWIPE);
+  g_return_val_if_fail (FP_IS_DEVICE (device), FP_FINGER_STATUS_NONE);
+
+  finger_status 
 
   return priv->finger_status;
 }
@@ -648,7 +652,7 @@ fp_device_open (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (priv->is_open)
+  if (priv->state_flags & FPI_DEVICE_STATE_OPEN)
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_ALREADY_OPEN));
@@ -732,7 +736,7 @@ fp_device_close (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -813,7 +817,7 @@ fp_device_enroll (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -914,7 +918,7 @@ fp_device_verify (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -1023,7 +1027,7 @@ fp_device_identify (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -1125,7 +1129,7 @@ fp_device_capture (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -1199,7 +1203,7 @@ fp_device_delete_print (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));
@@ -1276,7 +1280,7 @@ fp_device_list_prints (FpDevice           *device,
   if (g_task_return_error_if_cancelled (task))
     return;
 
-  if (!priv->is_open)
+  if (!(priv->state_flags & FPI_DEVICE_STATE_OPEN))
     {
       g_task_return_error (task,
                            fpi_device_error_new (FP_DEVICE_ERROR_NOT_OPEN));

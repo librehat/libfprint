@@ -48,10 +48,12 @@ test_context_has_fake_device (void)
   g_autoptr(FpContext) context = NULL;
   FpDevice *fake_device = NULL;
   GPtrArray *devices;
+  const char *tod_name;
   unsigned int i;
 
   context = fp_context_new ();
   devices = fp_context_get_devices (context);
+  tod_name = g_getenv ("FP_TOD_TEST_DRIVER_NAME");
 
   g_assert_nonnull (devices);
   g_assert_cmpuint (devices->len, ==, 1);
@@ -60,7 +62,7 @@ test_context_has_fake_device (void)
     {
       FpDevice *device = devices->pdata[i];
 
-      if (g_strcmp0 (fp_device_get_driver (device), "fake_test_dev_tod") == 0)
+      if (g_strcmp0 (fp_device_get_driver (device), tod_name) == 0)
         {
           fake_device = device;
           break;

@@ -43,4 +43,7 @@ struct _FpPrint
 
   GVariant  *data;
   GPtrArray *prints;
+
+  /* padding for future expansion */
+  gpointer _padding_dummy[16];
 };

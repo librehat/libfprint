@@ -196,10 +196,8 @@ endif
 
 if get_option('tod')
     tod_envs = envs
-    tod_envs.set('FP_TOD_DRIVERS_DIR', meson.current_build_dir())
     tod_envs.set('FP_TOD_KEEP_MODULES_OPEN', 'TRUE')
     tod_envs.set('FP_VIRTUAL_FAKE_DEVICE', 'yes')
-    tod_envs.append('FP_DRIVERS_WHITELIST', 'fake_test_dev_tod')
     tod_c_args = [
         '-DTEST_TOD_DRIVER=1',
     ]
@@ -232,6 +230,17 @@ if get_option('tod')
         'fpi-device',
     ]
 
+    tod_dirs = {
+        'fake_test_dev_tod': meson.current_build_dir(),
+    }
+
+    machine = run_command(meson.get_compiler('c'), '-dumpmachine').stdout().strip()
+    if machine.startswith('x86_64-')
+        tod_dirs += {
+            'fake_test_dev_tod_v1': meson.current_source_dir() / 'tod-drivers',
+        }
+    endif
+
     foreach test_name: tod_unit_tests
         basename = 'test-' + test_name
         sufix = test_name.endswith('-tod') ? '' : '-tod'
@@ -245,12 +254,21 @@ if get_option('tod')
             ],
             link_with: test_utils_tod,
         )
-        test(test_name,
-            find_program('test-runner.sh'),
-            suite: ['unit-tests', 'tod'],
-            args: [test_exe],
-            env: tod_envs,
-            depends: fake_driver,
-        )
+
+        foreach tod_driver, tod_dir : tod_dirs
+            tod_test_envs = tod_envs
+            tod_test_envs.append('FP_DRIVERS_WHITELIST', tod_driver)
+            tod_test_envs.set('FP_TOD_DRIVERS_DIR', tod_dir)
+            tod_test_envs.set('FP_TOD_TEST_DRIVER_NAME', tod_driver)
+
+            test(test_name + '-' + tod_driver,
+                # find_program('test-runner.sh'),
+                test_exe,
+                suite: ['unit-tests', 'tod', tod_driver],
+                # args: [test_exe],
+                env: tod_test_envs,
+                depends: fake_driver,
+            )
+        endforeach
     endforeach
 endif

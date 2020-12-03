@@ -601,9 +601,9 @@ fpi_device_remove (FpDevice *device)
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
   g_return_if_fail (FP_IS_DEVICE (device));
-  g_return_if_fail (!priv->is_removed);
+  g_return_if_fail (!(priv->state_flags & FPI_DEVICE_STATE_OPEN));
 
-  priv->is_removed = TRUE;
+  priv->state_flags |= FPI_DEVICE_STATE_REMOVED;
 
   g_object_notify (G_OBJECT (device), "removed");
 
@@ -753,7 +753,7 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
 
   /* Return FP_DEVICE_ERROR_REMOVED if the device is removed,
    * with the exception of a successful open, which is an odd corner case. */
-  if (priv->is_removed &&
+  if ((priv->state_flags & FPI_DEVICE_STATE_REMOVED) &&
       ((action != FPI_DEVICE_ACTION_OPEN) ||
        (action == FPI_DEVICE_ACTION_OPEN && data->type == FP_DEVICE_TASK_RETURN_ERROR)))
     {
@@ -922,7 +922,7 @@ fpi_device_open_complete (FpDevice *device, GError *error)
 
   if (!error)
     {
-      priv->is_open = TRUE;
+      priv->state_flags |= FPI_DEVICE_STATE_OPEN;
       g_object_notify (G_OBJECT (device), "open");
     }
 
@@ -979,7 +979,7 @@ fpi_device_close_complete (FpDevice *device, GError *error)
   /* Always consider the device closed. Drivers should try hard to close the
    * device. Generally, e.g. cancellations should be ignored.
    */
-  priv->is_open = FALSE;
+  priv->state_flags &= ~FPI_DEVICE_STATE_OPEN;
   g_object_notify (G_OBJECT (device), "open");
 
   if (!error)

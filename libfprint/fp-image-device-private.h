@@ -37,6 +37,9 @@ typedef struct
   FpImage            *capture_image;
 
   gint                bz3_threshold;
+
+  /* padding for future expansion */
+  gpointer _padding_dummy[64];
 } FpImageDevicePrivate;
 
 

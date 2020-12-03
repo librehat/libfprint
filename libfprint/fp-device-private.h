@@ -22,6 +22,13 @@
 
 #include "fpi-device.h"
 
+typedef enum {
+  /* We need to start from latest value of FP_FINGER_STATUS_PRESENT */
+  __FPI_DEVICE_STATE_PADDING = 1 << 4,
+  FPI_DEVICE_STATE_OPEN = 1 << 5,
+  FPI_DEVICE_STATE_REMOVED = 1 << 6,
+} FpiDeviceStateFlags;
+
 typedef struct
 {
   FpDeviceType type;
@@ -29,8 +36,7 @@ typedef struct
   GUsbDevice  *usb_device;
   const gchar *virtual_env;
 
-  gboolean     is_removed;
-  gboolean     is_open;
+  FpiDeviceStateFlags state_flags;
 
   gchar       *device_id;
   gchar       *device_name;
@@ -51,7 +57,9 @@ typedef struct
 
   /* State for tasks */
   gboolean            wait_for_finger;
-  FpFingerStatusFlags finger_status;
+
+  /* padding for future expansion */
+  gpointer _padding_dummy[64];
 } FpDevicePrivate;
 
 

@@ -68,6 +68,9 @@ struct _FpImage
 
   GPtrArray *minutiae;
   guint      ref_count;
+
+  /* padding for future expansion */
+  gpointer _padding_dummy[16];
 };
 
 gint fpi_std_sq_dev (const guint8 *buf,

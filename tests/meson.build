@@ -246,9 +246,10 @@ if get_option('tod')
             link_with: test_utils_tod,
         )
         test(test_name,
-            find_program('test-runner.sh'),
+            test_exe,
+            # find_program('test-runner.sh'),
             suite: ['unit-tests', 'tod'],
-            args: [test_exe],
+            # args: [test_exe],
             env: tod_envs,
             depends: fake_driver,
         )

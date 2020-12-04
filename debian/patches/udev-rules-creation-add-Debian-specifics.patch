@@ -12,10 +12,10 @@ ones; mode and group to all.
  1 file changed, 4 insertions(+), 5 deletions(-)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index 183cfa5..ff8fd1c 100644
+index d6c884c..3b6f572 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
-@@ -134,9 +134,6 @@ print_driver (const FpDeviceClass *cls)
+@@ -133,9 +133,6 @@ print_driver (const FpDeviceClass *cls)
          if (entry->vid == bl_entry->vid && entry->pid == bl_entry->pid)
            break;
  
@@ -25,7 +25,7 @@ index 183cfa5..ff8fd1c 100644
        key = g_strdup_printf ("%04x:%04x", entry->vid, entry->pid);
  
        if (g_hash_table_lookup (printed, key) != NULL)
-@@ -150,8 +147,10 @@ print_driver (const FpDeviceClass *cls)
+@@ -149,8 +146,10 @@ print_driver (const FpDeviceClass *cls)
        if (num_printed == 0)
          g_print ("# %s\n", cls->full_name);
  

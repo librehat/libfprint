@@ -70,6 +70,9 @@
 #define ELAN_CMD_TIMEOUT 10000
 #define ELAN_FINGER_TIMEOUT 200
 
+G_DECLARE_FINAL_TYPE (FpiDeviceElan, fpi_device_elan, FPI, DEVICE_ELAN,
+                      FpImageDevice);
+
 struct elan_cmd
 {
   unsigned char  cmd[ELAN_CMD_LEN];
@@ -211,6 +214,7 @@ static const FpIdEntry elan_id_table[] = {
   {.vid = ELAN_VEND_ID,  .pid = 0x0c32, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c33, .driver_data = ELAN_ALL_DEV},
   {.vid = ELAN_VEND_ID,  .pid = 0x0c42, .driver_data = ELAN_0C42},
+  {.vid = ELAN_VEND_ID,  .pid = 0x0c4d, .driver_data = ELAN_ALL_DEV},
   {.vid = 0,  .pid = 0,  .driver_data = 0},
 };
 
@@ -218,8 +222,8 @@ static void elan_cmd_done (FpiSsm *ssm);
 static void elan_cmd_read (FpiSsm   *ssm,
                            FpDevice *dev);
 
-static void elan_calibrate (FpDevice *dev);
-static void elan_capture (FpDevice *dev);
+static void elan_calibrate (FpiDeviceElan *self);
+static void elan_capture (FpiDeviceElan *self);
 
 static void dev_change_state (FpImageDevice      *dev,
                               FpiImageDeviceState state);

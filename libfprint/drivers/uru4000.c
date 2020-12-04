@@ -412,18 +412,6 @@ dev_change_state (FpImageDevice *dev, FpiImageDeviceState state)
 {
   FpiDeviceUru4000 *self = FPI_DEVICE_URU4000 (dev);
 
-  switch (state)
-    {
-    case FPI_IMAGE_DEVICE_STATE_INACTIVE:
-    case FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_ON:
-    case FPI_IMAGE_DEVICE_STATE_AWAIT_FINGER_OFF:
-    case FPI_IMAGE_DEVICE_STATE_CAPTURE:
-      break;
-
-    default:
-      g_assert_not_reached ();
-    }
-
   self->activate_state = state;
   if (self->img_transfer != NULL)
     return;
@@ -663,7 +651,11 @@ imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
     case IMAGING_CAPTURE:
       self->img_lines_done = 0;
       self->img_block = 0;
-      fpi_usb_transfer_submit (self->img_transfer, 0, NULL, image_transfer_cb, NULL);
+      fpi_usb_transfer_submit (fpi_usb_transfer_ref (self->img_transfer),
+                               0,
+                               NULL,
+                               image_transfer_cb,
+                               NULL);
 
       break;
 
@@ -723,7 +715,7 @@ imaging_run_state (FpiSsm *ssm, FpDevice *_dev)
                   num_lines);
           if (flags & BLOCKF_CHANGE_KEY)
             {
-              fp_dbg ("changing encryption keys.\n");
+              fp_dbg ("changing encryption keys.");
               img->block_info[self->img_block].flags &= ~BLOCKF_CHANGE_KEY;
               img->key_number++;
               self->img_enc_seed = rand ();
@@ -799,8 +791,7 @@ imaging_complete (FpiSsm *ssm, FpDevice *dev, GError *error)
   if (error)
     fpi_image_device_session_error (FP_IMAGE_DEVICE (dev), error);
 
-  /* Freed by callback or cancellation */
-  self->img_transfer = NULL;
+  g_clear_pointer (&self->img_transfer, fpi_usb_transfer_unref);
 
   g_free (self->img_data);
   self->img_data = NULL;
@@ -1182,7 +1173,10 @@ deactivate_write_reg_cb (FpiUsbTransfer *transfer, FpDevice *dev,
 static void
 dev_deactivate (FpImageDevice *dev)
 {
-  dev_change_state (dev, FPI_IMAGE_DEVICE_STATE_INACTIVE);
+  /* This is started/handled by execute_state_change in order to delay the
+   * action until after the image transfer has completed.
+   * We just need to override the function so that the complete handler is
+   * not called automatically. */
 }
 
 static void
@@ -1193,7 +1187,7 @@ execute_state_change (FpImageDevice *dev)
 
   switch (self->activate_state)
     {
-    case FPI_IMAGE_DEVICE_STATE_INACTIVE:
+    case FPI_IMAGE_DEVICE_STATE_DEACTIVATING:
       fp_dbg ("deactivating");
       self->irq_cb = NULL;
       self->irq_cb_data = NULL;
@@ -1247,6 +1241,12 @@ execute_state_change (FpImageDevice *dev)
       self->irq_cb = finger_presence_irq_cb;
       write_reg (dev, REG_MODE, MODE_AWAIT_FINGER_OFF,
                  change_state_write_reg_cb, NULL);
+      break;
+
+    /* Ignored states */
+    case FPI_IMAGE_DEVICE_STATE_IDLE:
+    case FPI_IMAGE_DEVICE_STATE_ACTIVATING:
+    case FPI_IMAGE_DEVICE_STATE_INACTIVE:
       break;
     }
 }

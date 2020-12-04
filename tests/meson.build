@@ -17,9 +17,11 @@ envs.set('FP_DRIVERS_WHITELIST', 'virtual_image')
 envs.set('NO_AT_BRIDGE', '1')
 
 drivers_tests = [
+    'aes3500',
     'elan',
     'synaptics',
     'vfs0050',
+    'vfs301',
     'vfs5011',
     'goodixmoc',
 ]
@@ -194,17 +196,21 @@ endif
 
 if get_option('tod')
     tod_envs = envs
-    tod_envs.set('FP_TOD_DRIVERS_DIR', meson.current_build_dir())
     tod_envs.set('FP_TOD_KEEP_MODULES_OPEN', 'TRUE')
     tod_envs.set('FP_VIRTUAL_FAKE_DEVICE', 'yes')
-    tod_envs.append('FP_DRIVERS_WHITELIST', 'fake_test_dev')
+    tod_envs.set('FP_TOD_TEST_DRIVER_NAME', 'fake_test_dev_tod')
+    tod_envs.prepend('LD_LIBRARY_PATH', meson.build_root() / 'libfprint/tod')
+    tod_c_args = [
+        '-DTEST_TOD_DRIVER=1',
+    ]
 
     fake_driver = shared_module('device-fake-tod-driver',
         sources: [
+            'test-device-fake.c',
             'test-device-fake-tod.c',
         ],
+        c_args: tod_c_args,
         link_with: [
-            test_utils,
             libfprint_tod,
         ],
         include_directories: include_directories('../libfprint'),
@@ -212,24 +218,58 @@ if get_option('tod')
         install: false
     )
 
+    test_utils_tod = static_library('fprint-test-utils-tod',
+        sources: [
+            'test-utils.c',
+            'test-utils-tod.c',
+        ],
+        dependencies: libfprint_private_dep,
+        install: false)
+
     tod_unit_tests = [
         'fp-context-tod',
         'fp-device-tod',
+        'fpi-device',
     ]
+
+    tod_dirs = {
+        'fake_test_dev_tod_current': meson.current_build_dir(),
+    }
+
+    machine = run_command(meson.get_compiler('c'), '-dumpmachine').stdout().strip()
+    if machine.startswith('x86_64-')
+        tod_dirs += {
+            'fake_test_dev_tod_v1': meson.current_source_dir() / 'tod-drivers',
+        }
+    endif
 
     foreach test_name: tod_unit_tests
         basename = 'test-' + test_name
-        test_exe = executable(basename,
+        sufix = test_name.endswith('-tod') ? '' : '-tod'
+        test_name = test_name + sufix
+        test_exe = executable(basename + sufix,
             sources: basename + '.c',
             dependencies: libfprint_private_dep,
-            c_args: common_cflags,
-            link_with: test_utils,
+            c_args: [
+                common_cflags,
+                tod_c_args,
+            ],
+            link_with: test_utils_tod,
         )
-        test(test_name,
-            find_program('test-runner.sh'),
-            suite: ['unit-tests', 'tod'],
-            args: [test_exe],
-            env: tod_envs,
-        )
+
+        foreach tod_driver, tod_dir : tod_dirs
+            tod_test_envs = tod_envs
+            tod_test_envs.prepend('FP_DRIVERS_WHITELIST', tod_driver)
+            tod_test_envs.set('FP_TOD_DRIVERS_DIR', tod_dir)
+            tod_test_envs.set('FP_TOD_TEST_DRIVER_NAME', tod_driver)
+
+            test(test_name + '-' + tod_driver,
+                find_program('test-runner.sh'),
+                suite: ['unit-tests', 'tod', tod_driver],
+                args: [test_exe],
+                env: tod_test_envs,
+                depends: fake_driver,
+            )
+        endforeach
     endforeach
 endif

@@ -199,10 +199,10 @@ if get_option('tod')
 
     fake_driver = shared_module('device-fake-tod-driver',
         sources: [
+            'test-device-fake.c',
             'test-device-fake-tod.c',
         ],
         link_with: [
-            test_utils,
             libfprint_tod,
         ],
         include_directories: include_directories('../libfprint'),

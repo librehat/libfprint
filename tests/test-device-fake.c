@@ -18,7 +18,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#define FP_COMPONENT "fake_test_dev"
+#define FP_COMPONENT "fake_test_dev_tod_v1"
 
 #include "test-device-fake.h"
 

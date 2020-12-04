@@ -1,3 +1,9 @@
+libfprint (1:1.90.5+tod1-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 04 Dec 2020 02:44:12 +0100
+
 libfprint (1:1.90.3+tod1-0ubuntu3) hirsute; urgency=medium
 
   * debian/patches:

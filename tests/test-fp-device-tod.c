@@ -19,37 +19,7 @@
 
 #include <libfprint/fprint.h>
 
-#include "test-utils.h"
-
-static FptContext *
-fpt_context_new_with_fake_dev (void)
-{
-  FptContext *tctx;
-  GPtrArray *devices;
-  unsigned int i;
-
-  tctx = fpt_context_new ();
-  devices = fp_context_get_devices (tctx->fp_context);
-
-  g_assert_nonnull (devices);
-  g_assert_cmpuint (devices->len, ==, 1);
-
-  for (i = 0; i < devices->len; ++i)
-    {
-      FpDevice *device = devices->pdata[i];
-
-      if (g_strcmp0 (fp_device_get_driver (device), "fake_test_dev") == 0)
-        {
-          tctx->device = device;
-          break;
-        }
-    }
-
-  g_assert_true (FP_IS_DEVICE (tctx->device));
-  g_object_add_weak_pointer (G_OBJECT (tctx->device), (gpointer) & tctx->device);
-
-  return tctx;
-}
+#include "test-utils-tod.h"
 
 static void
 on_device_opened (FpDevice *dev, GAsyncResult *res, FptContext *tctx)
@@ -130,7 +100,7 @@ test_device_open_sync_notify (void)
   g_autoptr(FptContext) tctx = fpt_context_new_with_fake_dev ();
 
   g_signal_connect (tctx->device, "notify::open", G_CALLBACK (on_open_notify), tctx);
-  fp_device_open_sync (tctx->device, NULL, &error);
+  g_assert_true (fp_device_open_sync (tctx->device, NULL, &error));
   g_assert_no_error (error);
   g_assert_true (GPOINTER_TO_INT (tctx->user_data));
 }
@@ -177,7 +147,7 @@ test_device_get_driver (void)
   g_autoptr(FptContext) tctx = fpt_context_new_with_fake_dev ();
 
   fp_device_open_sync (tctx->device, NULL, NULL);
-  g_assert_cmpstr (fp_device_get_driver (tctx->device), ==, "fake_test_dev");
+  g_assert_cmpstr (fp_device_get_driver (tctx->device), ==, g_getenv ("FP_TOD_TEST_DRIVER_NAME"));
 }
 
 static void
@@ -186,7 +156,7 @@ test_device_get_device_id (void)
   g_autoptr(FptContext) tctx = fpt_context_new_with_fake_dev ();
 
   fp_device_open_sync (tctx->device, NULL, NULL);
-  g_assert_cmpstr (fp_device_get_device_id (tctx->device), ==, "fake_test_dev");
+  g_assert_cmpstr (fp_device_get_device_id (tctx->device), ==, g_getenv ("FP_TOD_TEST_DRIVER_NAME"));
 }
 
 static void

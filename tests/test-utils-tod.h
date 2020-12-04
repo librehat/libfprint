@@ -1,7 +1,6 @@
 /*
- * Trivial storage driver for example programs
- *
- * Copyright (C) 2019 Benjamin Berg <bberg@redhat.com>
+ * Unit tests for libfprint
+ * Copyright (C) 2020 Marco Trevisan <marco.trevisan@canonical.com>
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -18,16 +17,9 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#pragma once
+#include <glib.h>
+#include "test-utils.h"
 
-int print_data_save (FpPrint *print,
-                     FpFinger finger);
-FpPrint * print_data_load (FpDevice *dev,
-                           FpFinger  finger);
-GPtrArray * gallery_data_load (FpDevice *dev);
-FpPrint * print_create_template (FpDevice *dev,
-                                 FpFinger  finger);
-gboolean print_image_save (FpPrint    *print,
-                           const char *path);
-gboolean save_image_to_pgm (FpImage    *img,
-                            const char *path);
+FptContext * fpt_context_new_with_fake_dev (void);
+
+FptContext * fpt_context_fake_dev_default (void);

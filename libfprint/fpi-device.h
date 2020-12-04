@@ -210,6 +210,7 @@ void fpi_device_get_delete_data (FpDevice *device,
                                  FpPrint **print);
 GCancellable *fpi_device_get_cancellable (FpDevice *device);
 
+void fpi_device_remove (FpDevice *device);
 
 GSource * fpi_device_add_timeout (FpDevice      *device,
                                   gint           interval,
@@ -262,5 +263,11 @@ void fpi_device_identify_report (FpDevice *device,
                                  FpPrint  *match,
                                  FpPrint  *print,
                                  GError   *error);
+
+gboolean fpi_device_report_finger_status (FpDevice           *device,
+                                          FpFingerStatusFlags finger_status);
+gboolean fpi_device_report_finger_status_changes (FpDevice           *device,
+                                                  FpFingerStatusFlags added_status,
+                                                  FpFingerStatusFlags removed_status);
 
 G_END_DECLS

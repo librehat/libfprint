@@ -1,4 +1,4 @@
-libfprint (1:1.90.5+tod1-0ubuntu1) UNRELEASED; urgency=medium
+libfprint (1:1.90.5+tod1-0ubuntu1) hirsute; urgency=medium
 
   * New upstream release:
     - Work around GUsb cancellation issue
@@ -30,7 +30,7 @@ libfprint (1:1.90.5+tod1-0ubuntu1) UNRELEASED; urgency=medium
     - Drop patches applied upstream
     - Use gbp pq topics for debian-specific patches
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 04 Dec 2020 02:56:09 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Fri, 04 Dec 2020 03:57:04 +0100
 
 libfprint (1:1.90.3+tod1-0ubuntu3) hirsute; urgency=medium
 

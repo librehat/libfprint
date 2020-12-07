@@ -52,7 +52,8 @@ typedef enum {
 } FpEnrollState;
 
 typedef enum {
-  FP_VERIFY_CAPTURE = 0,
+  FP_VERIFY_CHECK_PRINT,
+  FP_VERIFY_CAPTURE,
   FP_VERIFY_IDENTIFY,
   FP_VERIFY_NUM_STATES,
 } FpVerifyState;

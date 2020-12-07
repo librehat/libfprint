@@ -262,4 +262,13 @@ gboolean fpi_device_report_finger_status_changes (FpDevice           *device,
                                                   FpFingerStatusFlags added_status,
                                                   FpFingerStatusFlags removed_status);
 
+gboolean fpi_device_has_prints_stored (FpDevice           *device,
+                                  GCancellable       *cancellable,
+                                  GError       **error);
+
+// gboolean fpi_device_has_print_stored (FpDevice           *device,
+//                                   FpPrint      *print,
+//                                   GCancellable       *cancellable,
+//                                   GError       **error);
+
 G_END_DECLS

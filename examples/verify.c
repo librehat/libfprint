@@ -222,6 +222,9 @@ on_list_completed (FpDevice *dev, GAsyncResult *res, gpointer user_data)
         }
 
       if (!verify_print)
+        verify_print = stored_print;
+
+      if (!verify_print)
         {
           verify_quit (dev, verify_data);
           return;

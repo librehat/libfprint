@@ -49,6 +49,11 @@ typedef struct
   GSource            *current_idle_cancel_source;
   GSource            *current_task_idle_return_source;
 
+  /* To allow listing prints on identify / verify */
+  gboolean   prints_check;
+  GPtrArray *prints;
+  GError    *prints_error;
+
   /* State for tasks */
   gboolean            wait_for_finger;
   FpFingerStatusFlags finger_status;

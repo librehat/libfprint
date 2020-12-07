@@ -18,6 +18,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fp-device.h"
+#include "fpi-device.h"
 #define FP_COMPONENT "device"
 #include "fpi-log.h"
 
@@ -742,7 +744,6 @@ fp_device_task_return_in_idle_cb (gpointer user_data)
 
   g_autoptr(GTask) task = NULL;
 
-
   action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
   g_debug ("Completing action %s in idle!", action_str);
 
@@ -1274,6 +1275,14 @@ fpi_device_list_complete (FpDevice  *device,
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
   g_return_if_fail (FP_IS_DEVICE (device));
+
+  if (priv->prints_check) {
+    priv->prints_check = FALSE;
+    priv->prints = g_steal_pointer (&prints);
+    priv->prints_error = g_steal_pointer (&error);
+    return;
+  }
+
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_LIST);
 
   g_debug ("Device reported listing completion");
@@ -1551,3 +1560,76 @@ fpi_device_report_finger_status_changes (FpDevice           *device,
 
   return fpi_device_report_finger_status (device, finger_status);
 }
+
+gboolean fpi_device_has_prints_stored (FpDevice     *device,
+                                  GCancellable *cancellable,
+                                  GError       **error)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+  FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
+  g_autoptr (GPtrArray) prints_gallery = NULL;
+  g_autoptr (GPtrArray) prints = NULL;
+  unsigned int i;
+
+  g_return_val_if_fail (priv->current_action == FPI_DEVICE_ACTION_VERIFY ||
+                        priv->current_action == FPI_DEVICE_ACTION_IDENTIFY,
+                        FALSE);
+
+  if (!cls->list) {
+    g_propagate_error (error, fpi_device_error_new (FP_DEVICE_ERROR_NOT_SUPPORTED));
+    return FALSE;
+  }
+
+  if (priv->current_action == FPI_DEVICE_ACTION_VERIFY) {
+    FpPrint *print = NULL;
+
+    fpi_device_get_verify_data (device, &print);
+    prints_gallery = g_ptr_array_sized_new (1);
+    g_ptr_array_add (prints_gallery, print);
+  } else if (priv->current_action == FPI_DEVICE_ACTION_IDENTIFY) {
+    fpi_device_get_identify_data (device, &prints_gallery);
+    g_ptr_array_ref (prints_gallery);
+  }
+
+  priv->prints_check = TRUE;
+  cls->list (device);
+
+  while (!priv->prints_check) {
+    g_main_context_iteration (NULL, FALSE);
+  }
+
+  if (priv->prints_error) {
+    g_propagate_error (error, g_steal_pointer (&priv->prints_error));
+    return FALSE;
+  }
+
+  prints = g_steal_pointer (&priv->prints);
+  g_assert (prints);
+
+  for (i = 0; i < prints_gallery->len; ++i)
+    {
+      FpPrint *print = prints->pdata[i];
+
+      if (!g_ptr_array_find_with_equal_func (prints, print, (GEqualFunc) fp_print_equal, NULL))
+        return TRUE;
+    }
+
+  g_propagate_error (error, fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
+  return FALSE;
+}
+
+// gboolean fpi_device_has_print_stored (FpDevice           *device,
+//                                   FpPrint      *print,
+//                                   GCancellable       *cancellable,
+//                                   GError       **error)
+// {
+//   FpDevicePrivate *priv = fp_device_get_instance_private (device);
+//   g_autoptr (GPtrArray) prints = NULL;
+//   FpPrint *verify_print = NULL;
+
+//   g_return_val_if_fail (priv->current_action == FPI_DEVICE_ACTION_VERIFY, FALSE);
+
+//   fpi_device_get_verify_data (device, &verify_print);
+//   prints = g_ptr_array_sized_new (1);
+//   g_ptr_array_add (prints, verify_print);
+// }

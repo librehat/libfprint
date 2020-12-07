@@ -19,6 +19,7 @@
 
 
 
+#include "fpi-device.h"
 #define FP_COMPONENT "goodixmoc"
 
 #include "drivers_api.h"
@@ -361,6 +362,9 @@ fp_verify_cb (FpiDeviceGoodixMoc  *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
+
+  g_assert (error == NULL);
+
   if (resp->verify.match)
     {
       if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
@@ -396,7 +400,6 @@ fp_verify_cb (FpiDeviceGoodixMoc  *self,
               find = true;
               break;
             }
-
         }
       if (find)
         {
@@ -409,14 +412,19 @@ fp_verify_cb (FpiDeviceGoodixMoc  *self,
 
   if (!find)
     {
-      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY)
+      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY) {
         fpi_device_verify_report (device, FPI_MATCH_FAIL, NULL, error);
-      else
+      } else {
+        if (!fpi_device_has_prints_stored (device, self->cancellable, &error)) {
+          fpi_ssm_mark_failed (self->task_ssm, error);
+          return;
+        }
+
         fpi_device_identify_report (device, NULL, NULL, error);
+      }
     }
 
   fpi_ssm_mark_completed (self->task_ssm);
-
 }
 
 static void
@@ -432,6 +440,19 @@ fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
 
   switch (fpi_ssm_get_cur_state (ssm))
     {
+    case FP_VERIFY_CHECK_PRINT: {
+      g_autoptr (GError) error = NULL;
+
+      if (fpi_device_get_current_action (device) == FPI_DEVICE_ACTION_VERIFY) {
+        fpi_ssm_next_state (ssm);
+        break;
+      }
+
+      if (!fpi_device_has_prints_stored (device, self->cancellable, &error)) {
+        fpi_ssm_mark_failed (ssm, error);
+        break;
+      }
+    }
     case FP_VERIFY_CAPTURE:
       goodix_sensor_cmd (self, MOC_CMD0_CAPTURE_DATA, MOC_CMD1_DEFAULT,
                          true,
@@ -1319,7 +1340,6 @@ gx_fp_verify_identify (FpDevice *device)
                                 FP_VERIFY_NUM_STATES);
 
   fpi_ssm_start (self->task_ssm, fp_verify_ssm_done);
-
 }
 
 static void

@@ -43,3 +43,31 @@ G_DEFINE_AUTOPTR_CLEANUP_FUNC (GDate, g_date_free);
 #else
 #define FP_GNUC_ACCESS(m, p, s)
 #endif
+
+#if !GLIB_CHECK_VERSION (2, 61, 2)
+inline GPtrArray *
+g_ptr_array_copy (GPtrArray *array,
+                  GCopyFunc  func,
+                  gpointer   user_data)
+{
+  GPtrArray *new_array;
+
+  g_return_val_if_fail (array != NULL, NULL);
+
+  g_assert ((!array->len || G_IS_OBJECT (array->pdata[0])) &&
+            (func == (GCopyFunc) g_object_ref || func == NULL) &&
+            "Only arrays of objects are supported here!");
+
+  new_array = g_ptr_array_new_full (array->len, g_object_unref);
+
+  if (array->len > 0)
+    memcpy (new_array->pdata, array->pdata,
+            array->len * sizeof (*array->pdata));
+
+  new_array->len = array->len;
+
+  g_ptr_array_foreach (array, (GFunc) func, user_data);
+
+  return new_array;
+}
+#endif

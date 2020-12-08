@@ -135,6 +135,55 @@ make_fake_prints_gallery (FpDevice *device,
   return array;
 }
 
+static gboolean
+compare_galleries (GPtrArray *g1,
+                   GPtrArray *g2)
+{
+  unsigned i;
+
+  if (g1 == g2)
+    return TRUE;
+
+  if ((!g1 && g2) || (g1 && !g2))
+    return FALSE;
+
+  if (g1->len != g2->len)
+    return FALSE;
+
+  for (i = 0; i < g1->len; i++)
+    {
+      FpPrint *print = g_ptr_array_index (g1, i);
+
+      if (!g_ptr_array_find_with_equal_func (g2, print, (GEqualFunc)
+                                             fp_print_equal, NULL))
+        return FALSE;
+    }
+
+  return TRUE;
+}
+
+static void
+assert_equal_galleries (GPtrArray *g1,
+                        GPtrArray *g2)
+{
+  unsigned i;
+
+  g_assert ((g1 && g2) || (!g1 || !g1));
+
+  if (g1 == g2)
+    return;
+
+  g_assert_cmpuint (g1->len, ==, g2->len);
+
+  for (i = 0; i < g1->len; i++)
+    {
+      FpPrint *print = g_ptr_array_index (g1, i);
+
+      g_assert_true (g_ptr_array_find_with_equal_func (g2, print, (GEqualFunc)
+                                                       fp_print_equal, NULL));
+    }
+}
+
 /* Tests */
 
 static void
@@ -2165,6 +2214,188 @@ test_driver_list_no_storage (void)
 }
 
 static void
+test_driver_list_cached (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(GPtrArray) prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) more_prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) other_prints = NULL;
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
+  fake_dev->ret_list = g_steal_pointer (&prints);
+  prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (prints == fake_dev->ret_list);
+
+  fake_dev->last_called_function = NULL;
+  fake_dev->ret_list = more_prints;
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert_null (fake_dev->last_called_function);
+  g_assert_no_error (error);
+  assert_equal_galleries (other_prints, prints);
+  g_assert_true (compare_galleries (other_prints, prints));
+}
+
+static void
+test_driver_list_cached_after_enroll (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(GPtrArray) prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) more_prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) other_prints = NULL;
+  g_autoptr(FpPrint) enrolled_print = NULL;
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
+  fake_dev->ret_list = g_steal_pointer (&prints);
+  prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (prints == fake_dev->ret_list);
+
+  fake_dev->last_called_function = NULL;
+  fake_dev->ret_list = more_prints;
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert_null (fake_dev->last_called_function);
+  g_assert_no_error (error);
+  assert_equal_galleries (other_prints, prints);
+  g_assert_true (compare_galleries (other_prints, prints));
+
+  enrolled_print = fp_device_enroll_sync (device, fp_print_new (device), NULL,
+                                          NULL, NULL, &error);
+  g_assert_no_error (error);
+
+  g_clear_pointer (&other_prints, g_ptr_array_unref);
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function != dev_class->list);
+  g_assert_no_error (error);
+  g_assert_cmpuint (other_prints->len, ==, prints->len + 1);
+
+  g_assert_true (g_ptr_array_find (other_prints, enrolled_print, NULL));
+
+  fake_dev->ret_error = fpi_device_error_new (FP_DEVICE_ERROR_DATA_DUPLICATE);
+  fp_device_enroll_sync (device, fp_print_new (device), NULL,
+                         NULL, NULL, &error);
+
+  g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_DUPLICATE);
+
+  fake_dev->ret_error = NULL;
+  fake_dev->ret_list = g_ptr_array_ref (more_prints);
+  g_clear_pointer (&other_prints, g_ptr_array_unref);
+  g_clear_error (&error);
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (other_prints != prints);
+  assert_equal_galleries (other_prints, more_prints);
+  g_assert_true (compare_galleries (other_prints, more_prints));
+}
+
+static void
+test_driver_list_cached_after_delete (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(GPtrArray) prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) more_prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) other_prints = NULL;
+  g_autoptr(FpPrint) deleted_print = NULL;
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
+  fake_dev->ret_list = g_steal_pointer (&prints);
+  prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (prints == fake_dev->ret_list);
+
+  fake_dev->last_called_function = NULL;
+  fake_dev->ret_list = more_prints;
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert_null (fake_dev->last_called_function);
+  g_assert_no_error (error);
+  assert_equal_galleries (other_prints, prints);
+  g_assert_true (compare_galleries (other_prints, prints));
+
+  deleted_print = g_object_ref (prints->pdata[10]);
+  fp_device_delete_print_sync (device, deleted_print, NULL, &error);
+
+  g_assert_no_error (error);
+
+  g_clear_pointer (&other_prints, g_ptr_array_unref);
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function != dev_class->list);
+  g_assert_no_error (error);
+  g_assert_cmpuint (other_prints->len, ==, prints->len - 1);
+
+  g_assert_false (g_ptr_array_find (other_prints, deleted_print, NULL));
+
+  fake_dev->ret_error = fpi_device_error_new (FP_DEVICE_ERROR_DATA_DUPLICATE);
+  fp_device_delete_print_sync (device, prints->pdata[3], NULL, &error);
+
+  g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_DATA_DUPLICATE);
+
+  fake_dev->ret_error = NULL;
+  fake_dev->ret_list = g_ptr_array_ref (more_prints);
+  g_clear_pointer (&other_prints, g_ptr_array_unref);
+  g_clear_error (&error);
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (other_prints != prints);
+  assert_equal_galleries (other_prints, prints);
+  g_assert_true (compare_galleries (other_prints, prints));
+}
+
+static void
+test_driver_list_cached_after_close (void)
+{
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
+  g_autoptr(GPtrArray) prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) more_prints = make_fake_prints_gallery (device, 500);
+  g_autoptr(GPtrArray) other_prints = NULL;
+  FpDeviceClass *dev_class = FP_DEVICE_GET_CLASS (device);
+  FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+
+  fake_dev->ret_list = g_steal_pointer (&prints);
+  prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert (fake_dev->last_called_function == dev_class->list);
+  g_assert_no_error (error);
+  g_assert (prints == fake_dev->ret_list);
+
+  fake_dev->last_called_function = NULL;
+  fake_dev->ret_list = more_prints;
+  other_prints = fp_device_list_prints_sync (device, NULL, &error);
+
+  g_assert_null (fake_dev->last_called_function);
+  g_assert_no_error (error);
+  assert_equal_galleries (other_prints, prints);
+  g_assert_true (compare_galleries (other_prints, prints));
+
+  fp_device_close_sync (device, NULL, &error);
+  g_assert_no_error (error);
+
+  g_assert_null (fp_device_list_prints_sync (device, NULL, &error));
+  g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_NOT_OPEN);
+}
+
+static void
 test_driver_delete (void)
 {
   g_autoptr(GError) error = NULL;
@@ -2866,6 +3097,10 @@ main (int argc, char *argv[])
   g_test_add_func ("/driver/list", test_driver_list);
   g_test_add_func ("/driver/list/error", test_driver_list_error);
   g_test_add_func ("/driver/list/no_storage", test_driver_list_no_storage);
+  g_test_add_func ("/driver/list/cached_prints", test_driver_list_cached);
+  g_test_add_func ("/driver/list/cached_prints/after-enroll", test_driver_list_cached_after_enroll);
+  g_test_add_func ("/driver/list/cached_prints/after-delete", test_driver_list_cached_after_delete);
+  g_test_add_func ("/driver/list/cached_prints/after-close", test_driver_list_cached_after_close);
   g_test_add_func ("/driver/delete", test_driver_delete);
   g_test_add_func ("/driver/delete/error", test_driver_delete_error);
   g_test_add_func ("/driver/cancel", test_driver_cancel);

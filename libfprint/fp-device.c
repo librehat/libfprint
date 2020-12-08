@@ -164,6 +164,8 @@ fp_device_finalize (GObject *object)
   g_clear_pointer (&priv->current_idle_cancel_source, g_source_destroy);
   g_clear_pointer (&priv->current_task_idle_return_source, g_source_destroy);
 
+  g_clear_pointer (&priv->cached_prints, g_ptr_array_unref);
+
   g_clear_pointer (&priv->device_id, g_free);
   g_clear_pointer (&priv->device_name, g_free);
 
@@ -1449,6 +1451,13 @@ fp_device_list_prints (FpDevice           *device,
       g_task_return_error (task,
                            fpi_device_error_new_msg (FP_DEVICE_ERROR_NOT_SUPPORTED,
                                                      "Device has no storage"));
+      return;
+    }
+
+  if (priv->cached_prints)
+    {
+      g_task_return_pointer (task, g_ptr_array_ref (priv->cached_prints),
+                             (GDestroyNotify) g_ptr_array_unref);
       return;
     }
 

@@ -953,6 +953,7 @@ fpi_device_close_complete (FpDevice *device, GError *error)
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
+  g_clear_pointer (&priv->cached_prints, g_ptr_array_unref);
 
   switch (priv->type)
     {
@@ -1003,6 +1004,8 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
 {
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
+  g_autoptr(GPtrArray) cached_prints = g_steal_pointer (&priv->cached_prints);
+
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_ENROLL);
 
@@ -1032,6 +1035,12 @@ fpi_device_enroll_complete (FpDevice *device, FpPrint *print, GError *error)
 
           finger_str = g_enum_to_string (FP_TYPE_FINGER, fp_print_get_finger (print));
           g_debug ("Print for finger %s enrolled", finger_str);
+
+          if (cached_prints)
+            {
+              priv->cached_prints = g_steal_pointer (&cached_prints);
+              g_ptr_array_add (priv->cached_prints, g_object_ref_sink (print));
+            }
 
           fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_OBJECT, print);
         }
@@ -1238,6 +1247,8 @@ fpi_device_delete_complete (FpDevice *device,
 {
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
+  g_autoptr(GPtrArray) cached_prints = g_steal_pointer (&priv->cached_prints);
+
   g_return_if_fail (FP_IS_DEVICE (device));
   g_return_if_fail (priv->current_action == FPI_DEVICE_ACTION_DELETE);
 
@@ -1247,10 +1258,29 @@ fpi_device_delete_complete (FpDevice *device,
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
 
   if (!error)
-    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_BOOL,
-                                    GUINT_TO_POINTER (TRUE));
+    {
+      if (cached_prints)
+        {
+          FpPrint *deleted;
+          unsigned index;
+
+          fpi_device_get_delete_data (device, &deleted);
+
+          if (g_ptr_array_find_with_equal_func (cached_prints, deleted,
+                                                (GEqualFunc) fp_print_equal, &index))
+            {
+              g_ptr_array_remove_index (cached_prints, index);
+              priv->cached_prints = g_steal_pointer (&cached_prints);
+            }
+        }
+
+      fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_BOOL,
+                                      GUINT_TO_POINTER (TRUE));
+    }
   else
-    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
+    {
+      fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
+    }
 }
 
 /**
@@ -1280,6 +1310,7 @@ fpi_device_list_complete (FpDevice  *device,
 
   clear_device_cancel_action (device);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
+  g_clear_pointer (&priv->cached_prints, g_ptr_array_unref);
 
   if (prints && error)
     {
@@ -1294,9 +1325,17 @@ fpi_device_list_complete (FpDevice  *device,
     }
 
   if (!error)
-    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_PTR_ARRAY, prints);
+    {
+      G_GNUC_BEGIN_IGNORE_DEPRECATIONS
+      priv->cached_prints = g_ptr_array_copy (prints, (GCopyFunc) g_object_ref, NULL);
+      G_GNUC_END_IGNORE_DEPRECATIONS fpi_device_return_task_in_idle (device,
+                                                                     FP_DEVICE_TASK_RETURN_PTR_ARRAY,
+                                                                     prints);
+    }
   else
-    fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
+    {
+      fpi_device_return_task_in_idle (device, FP_DEVICE_TASK_RETURN_ERROR, error);
+    }
 }
 
 /**

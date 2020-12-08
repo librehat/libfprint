@@ -949,7 +949,7 @@ test_driver_verify (void)
 }
 
 static void
-test_driver_verify_fail (void)
+test_driver_verify_fail_stored (void)
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(FpAutoCloseDevice) device = auto_close_fake_device_new ();
@@ -962,11 +962,12 @@ test_driver_verify_fail (void)
 
   enrolled_print = make_fake_print_reffed (device, g_variant_new_uint64 (3));
   fake_dev->ret_result = FPI_MATCH_FAIL;
+  fake_dev->ret_list = make_fake_prints_gallery (device, 5);
   g_assert_true (fp_device_verify_sync (device, enrolled_print, NULL,
                                         test_driver_match_cb, match_data,
                                         &match, &out_print, &error));
 
-  g_assert (fake_dev->last_called_function == dev_class->verify);
+  g_assert (fake_dev->last_called_function == dev_class->list);
   g_assert_no_error (error);
 
   g_assert_true (match_data->called);
@@ -1310,7 +1311,7 @@ test_driver_identify (void)
 }
 
 static void
-test_driver_identify_fail (void)
+test_driver_identify_fail_stored (void)
 {
   g_autoptr(GError) error = NULL;
   g_autoptr(FpPrint) print = NULL;
@@ -1323,7 +1324,8 @@ test_driver_identify_fail (void)
 
   g_assert_true (fp_device_supports_identify (device));
 
-  fake_dev->ret_print = make_fake_print (device, NULL);
+  fake_dev->ret_print = make_fake_print (device, g_variant_new_uint64 (55));
+  fake_dev->ret_list = make_fake_prints_gallery (device, 500);
   g_assert_true (fp_device_identify_sync (device, prints, NULL,
                                           test_driver_match_cb, match_data,
                                           &matched_print, &print, &error));
@@ -1334,7 +1336,7 @@ test_driver_identify_fail (void)
   g_assert_true (match_data->match == matched_print);
   g_assert_true (match_data->print == print);
 
-  g_assert (fake_dev->last_called_function == dev_class->identify);
+  g_assert (fake_dev->last_called_function == dev_class->list);
   g_assert_no_error (error);
 
   g_assert (print != NULL && print == fake_dev->ret_print);
@@ -1465,6 +1467,7 @@ test_driver_identify_complete_retry (void)
   g_autoptr(GError) error = NULL;
   FpiDeviceFake *fake_dev;
 
+  dev_class->features |= FPI_DEVICE_FEATURE_CHECKS_DATA;
   dev_class->identify = fake_device_identify_complete_error;
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   fake_dev = FPI_DEVICE_FAKE (device);
@@ -2407,14 +2410,14 @@ main (int argc, char *argv[])
   g_test_add_func ("/driver/enroll/error/no_print", test_driver_enroll_error_no_print);
   g_test_add_func ("/driver/enroll/progress", test_driver_enroll_progress);
   g_test_add_func ("/driver/verify", test_driver_verify);
-  g_test_add_func ("/driver/verify/fail", test_driver_verify_fail);
+  g_test_add_func ("/driver/verify/fail/stored", test_driver_verify_fail_stored);
   g_test_add_func ("/driver/verify/retry", test_driver_verify_retry);
   g_test_add_func ("/driver/verify/error", test_driver_verify_error);
   g_test_add_func ("/driver/verify/report_no_cb", test_driver_verify_report_no_callback);
   g_test_add_func ("/driver/verify/not_reported", test_driver_verify_not_reported);
   g_test_add_func ("/driver/verify/complete_retry", test_driver_verify_complete_retry);
   g_test_add_func ("/driver/identify", test_driver_identify);
-  g_test_add_func ("/driver/identify/fail", test_driver_identify_fail);
+  g_test_add_func ("/driver/identify/fail/stored", test_driver_identify_fail_stored);
   g_test_add_func ("/driver/identify/retry", test_driver_identify_retry);
   g_test_add_func ("/driver/identify/error", test_driver_identify_error);
   g_test_add_func ("/driver/identify/not_reported", test_driver_identify_not_reported);

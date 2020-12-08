@@ -48,6 +48,17 @@ struct _FpIdEntry
 };
 
 /**
+ * FpDeviceFeature:
+ * @FPI_DEVICE_FEATURE_NONE: Device does not support any feature
+ * @FPI_DEVICE_FEATURE_CHECKS_DATA: Device can handle internally
+ *   FP_DEVICE_ERROR_DATA_NOT_FOUND errors
+ */
+typedef enum {
+  FPI_DEVICE_FEATURE_NONE = 0,
+  FPI_DEVICE_FEATURE_CHECKS_DATA  = 1 << 0,
+} FpiDeviceFeature;
+
+/**
  * FpDeviceClass:
  * @id: ID string for the driver. Should be a valid C identifier and should
  *   match the drivers file name.
@@ -111,6 +122,7 @@ struct _FpDeviceClass
   const gchar     *full_name;
   FpDeviceType     type;
   const FpIdEntry *id_table;
+  FpiDeviceFeature features;
 
   /* Defaults for device properties */
   gint       nr_enroll_stages;

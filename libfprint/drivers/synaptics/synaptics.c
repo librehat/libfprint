@@ -1318,6 +1318,7 @@ fpi_device_synaptics_class_init (FpiDeviceSynapticsClass *klass)
   dev_class->full_name = SYNAPTICS_DRIVER_FULLNAME;
 
   dev_class->type = FP_DEVICE_TYPE_USB;
+  dev_class->features = FPI_DEVICE_FEATURE_CHECKS_DATA;
   dev_class->scan_type = FP_SCAN_TYPE_PRESS;
   dev_class->id_table = id_table;
   dev_class->nr_enroll_stages = ENROLL_SAMPLES;

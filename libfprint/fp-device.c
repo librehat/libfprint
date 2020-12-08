@@ -881,6 +881,112 @@ fp_device_enroll_finish (FpDevice     *device,
   return g_task_propagate_pointer (G_TASK (result), error);
 }
 
+static void
+on_list_check_completed (GObject      *obj,
+                         GAsyncResult *res,
+                         void         *user_data)
+{
+  FpDevice *device = FP_DEVICE (obj);
+
+  g_autoptr(GTask) task = user_data;
+  g_autoptr(GPtrArray) storage = NULL;
+  FpMatchData *data;
+
+  /* We ignore the error here, in such case we'd just not get the storage */
+  storage = fp_device_list_prints_finish (device, res, NULL);
+  data = g_task_get_task_data (task);
+
+  if (storage)
+    {
+      g_autoptr(GPtrArray) gallery = NULL;
+      gboolean found = TRUE;
+      unsigned int i;
+
+      if (data->enrolled_print)
+        {
+          gallery = g_ptr_array_sized_new (1);
+          g_ptr_array_add (gallery, data->enrolled_print);
+        }
+      else if (data->gallery)
+        {
+          gallery = g_ptr_array_ref (data->gallery);
+        }
+      else
+        {
+          g_assert_not_reached ();
+        }
+
+      fp_dbg ("Device storage contains %u prints, gallery %u", storage->len, gallery->len);
+
+      if (!gallery->len)
+        found = FALSE;
+
+      for (i = 0; i < gallery->len; i++)
+        {
+          FpPrint *print = g_ptr_array_index (gallery, i);
+
+          if (!g_ptr_array_find_with_equal_func (storage, print,
+                                                 (GEqualFunc) fp_print_equal, NULL))
+            {
+              found = FALSE;
+              break;
+            }
+        }
+
+      if (!found)
+        {
+          g_task_return_error (task, fpi_device_error_new (FP_DEVICE_ERROR_DATA_NOT_FOUND));
+          return;
+        }
+    }
+
+  /* The print is available, so we can just fail without error */
+  if (data->enrolled_print)
+    g_task_return_int (task, FPI_MATCH_FAIL);
+  else if (data->gallery)
+    g_task_return_boolean (task, TRUE);
+  else
+    g_assert_not_reached ();
+}
+
+static void
+on_verify_completed (GObject      *obj,
+                     GAsyncResult *res,
+                     void         *user_data)
+{
+  g_autoptr(GTask) task = g_steal_pointer (&user_data);
+  g_autoptr(GError) error = NULL;
+  FpDevice *device = FP_DEVICE (obj);
+  FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
+  GCancellable *cancellable;
+  FpMatchData *data;
+  gboolean match;
+
+  if (!fp_device_verify_finish (device, res, &match, NULL, &error))
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      return;
+    }
+
+  if (match || !cls->list || (cls->features & FPI_DEVICE_FEATURE_CHECKS_DATA))
+    {
+      g_task_return_int (task, match ? FPI_MATCH_SUCCESS : FPI_MATCH_FAIL);
+      return;
+    }
+
+  g_assert (!match);
+  g_assert (!error);
+
+  fp_dbg ("Verification completed with no match, checking if the print is still stored");
+
+  data = g_task_get_task_data (task);
+  g_assert (data->enrolled_print);
+
+  cancellable = g_task_get_cancellable (task);
+  fp_device_list_prints (device, cancellable,
+                         on_list_check_completed, g_steal_pointer (&task));
+}
+
 /**
  * fp_device_verify:
  * @device: a #FpDevice
@@ -928,10 +1034,6 @@ fp_device_verify (FpDevice           *device,
       return;
     }
 
-  priv->current_action = FPI_DEVICE_ACTION_VERIFY;
-  priv->current_task = g_steal_pointer (&task);
-  maybe_cancel_on_cancelled (device, cancellable);
-
   data = g_new0 (FpMatchData, 1);
   data->enrolled_print = g_object_ref (enrolled_print);
   data->match_cb = match_cb;
@@ -939,7 +1041,16 @@ fp_device_verify (FpDevice           *device,
   data->match_destroy = match_destroy;
 
   // Attach the match data as task data so that it is destroyed
-  g_task_set_task_data (priv->current_task, data, (GDestroyNotify) match_data_free);
+  g_task_set_task_data (task, data, (GDestroyNotify) match_data_free);
+
+  priv->current_action = FPI_DEVICE_ACTION_VERIFY;
+  priv->current_task = g_task_new (device, cancellable, on_verify_completed,
+                                   g_steal_pointer (&task));
+
+  // Attach a copy of match data for the device task
+  g_task_set_task_data (priv->current_task, data, NULL);
+
+  maybe_cancel_on_cancelled (device, cancellable);
 
   FP_DEVICE_GET_CLASS (device)->verify (device);
 }
@@ -990,6 +1101,44 @@ fp_device_verify_finish (FpDevice     *device,
   return res != FPI_MATCH_ERROR;
 }
 
+static void
+on_identify_completed (GObject      *obj,
+                       GAsyncResult *res,
+                       void         *user_data)
+{
+  g_autoptr(GTask) task = g_steal_pointer (&user_data);
+  g_autoptr(GError) error = NULL;
+  g_autoptr(FpPrint) match = NULL;
+  FpDevice *device = FP_DEVICE (obj);
+  FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
+  GCancellable *cancellable;
+  FpMatchData *data;
+
+  if (!fp_device_identify_finish (device, res, &match, NULL, &error))
+    {
+      g_task_return_error (task, g_steal_pointer (&error));
+      return;
+    }
+
+  if (match || !cls->list || (cls->features & FPI_DEVICE_FEATURE_CHECKS_DATA))
+    {
+      g_task_return_boolean (task, TRUE);
+      return;
+    }
+
+  g_assert (!match);
+  g_assert (!error);
+
+  data = g_task_get_task_data (task);
+  g_assert (data->gallery);
+
+  fp_dbg ("Identification completed with no match, checking if prints in gallery are still stored");
+
+  cancellable = g_task_get_cancellable (task);
+  fp_device_list_prints (device, cancellable,
+                         on_list_check_completed, g_steal_pointer (&task));
+}
+
 /**
  * fp_device_identify:
  * @device: a #FpDevice
@@ -1037,10 +1186,6 @@ fp_device_identify (FpDevice           *device,
       return;
     }
 
-  priv->current_action = FPI_DEVICE_ACTION_IDENTIFY;
-  priv->current_task = g_steal_pointer (&task);
-  maybe_cancel_on_cancelled (device, cancellable);
-
   data = g_new0 (FpMatchData, 1);
   data->gallery = g_ptr_array_ref (prints);
   data->match_cb = match_cb;
@@ -1048,7 +1193,16 @@ fp_device_identify (FpDevice           *device,
   data->match_destroy = match_destroy;
 
   // Attach the match data as task data so that it is destroyed
-  g_task_set_task_data (priv->current_task, data, (GDestroyNotify) match_data_free);
+  g_task_set_task_data (task, data, (GDestroyNotify) match_data_free);
+
+  priv->current_action = FPI_DEVICE_ACTION_IDENTIFY;
+  priv->current_task = g_task_new (device, cancellable, on_identify_completed,
+                                   g_steal_pointer (&task));
+
+  // Attach a copy of match data for the device task
+  g_task_set_task_data (priv->current_task, data, NULL);
+
+  maybe_cancel_on_cancelled (device, cancellable);
 
   FP_DEVICE_GET_CLASS (device)->identify (device);
 }

@@ -140,6 +140,8 @@ fp_device_constructed (GObject *object)
   FpDeviceClass *cls = FP_DEVICE_GET_CLASS (self);
   FpDevicePrivate *priv = fp_device_get_instance_private (self);
 
+  g_assert (cls->features != FPI_DEVICE_FEATURE_NONE);
+
   priv->type = cls->type;
   if (cls->nr_enroll_stages)
     priv->nr_enroll_stages = cls->nr_enroll_stages;
@@ -627,7 +629,7 @@ fp_device_supports_identify (FpDevice *device)
 
   g_return_val_if_fail (FP_IS_DEVICE (device), FALSE);
 
-  return cls->identify != NULL;
+  return cls->identify && !!(cls->features & FPI_DEVICE_FEATURE_IDENTIFY);
 }
 
 /**
@@ -645,7 +647,7 @@ fp_device_supports_capture (FpDevice *device)
 
   g_return_val_if_fail (FP_IS_DEVICE (device), FALSE);
 
-  return cls->capture != NULL;
+  return cls->capture && !!(cls->features & FPI_DEVICE_FEATURE_CAPTURE);
 }
 
 /**
@@ -664,7 +666,7 @@ fp_device_has_storage (FpDevice *device)
 
   g_return_val_if_fail (FP_IS_DEVICE (device), FALSE);
 
-  return cls->list != NULL;
+  return !!(cls->features & FPI_DEVICE_FEATURE_STORAGE);
 }
 
 /**

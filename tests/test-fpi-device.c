@@ -1311,7 +1311,7 @@ test_driver_do_not_support_identify (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->identify = NULL;
+  dev_class->features &= ~FPI_DEVICE_FEATURE_IDENTIFY;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_false (fp_device_supports_identify (device));
@@ -1639,6 +1639,7 @@ test_driver_supports_capture (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
+  dev_class->features |= FPI_DEVICE_FEATURE_CAPTURE;
   dev_class->capture = fake_device_stub_capture;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
@@ -1651,6 +1652,7 @@ test_driver_do_not_support_capture (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
+  dev_class->features &= ~FPI_DEVICE_FEATURE_CAPTURE;
   dev_class->capture = NULL;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
@@ -1706,7 +1708,7 @@ test_driver_has_storage (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->list = fake_device_stub_list;
+  dev_class->features |= FPI_DEVICE_FEATURE_STORAGE;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_true (fp_device_has_storage (device));
@@ -1718,7 +1720,7 @@ test_driver_has_not_storage (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->list = NULL;
+  dev_class->features &= ~FPI_DEVICE_FEATURE_STORAGE;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_false (fp_device_has_storage (device));
@@ -1770,7 +1772,7 @@ test_driver_list_no_storage (void)
   g_autoptr(GPtrArray) prints = NULL;
   g_autoptr(GError) error = NULL;
 
-  dev_class->list = NULL;
+  dev_class->features &= ~FPI_DEVICE_FEATURE_STORAGE;
 
   device = auto_close_fake_device_new ();
   g_assert_false (fp_device_has_storage (device));

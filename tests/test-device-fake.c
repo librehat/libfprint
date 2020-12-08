@@ -212,6 +212,7 @@ static void
 fpi_device_fake_list (FpDevice *device)
 {
   FpiDeviceFake *fake_dev = FPI_DEVICE_FAKE (device);
+  GPtrArray *ret_list = fake_dev->ret_list;
 
   fake_dev->last_called_function = fpi_device_fake_list;
   g_assert_cmpuint (fpi_device_get_current_action (device), ==, FPI_DEVICE_ACTION_LIST);
@@ -222,7 +223,10 @@ fpi_device_fake_list (FpDevice *device)
       return;
     }
 
-  fpi_device_list_complete (device, fake_dev->ret_list, fake_dev->ret_error);
+  if (!ret_list && !fake_dev->ret_error)
+    ret_list = g_ptr_array_new ();
+
+  fpi_device_list_complete (device, ret_list, fake_dev->ret_error);
 }
 
 static void

@@ -28,7 +28,7 @@ def identify_done(dev, res):
     global identified
     identified = True
     identify_match, identify_print = dev.identify_finish(res)
-    print('async indentification done: ', identify_match, identify_print)
+    print('indentification_done: ', identify_match, identify_print)
     assert identify_match.equal(identify_print)
 
 # List, enroll, list, verify, identify, delete
@@ -46,18 +46,39 @@ verify_res, verify_print = d.verify_sync(p)
 print("verify done")
 del p
 assert verify_res == True
-# print("identifying")
-# identify_match, identify_print = d.identify_sync(stored)
-# assert identify_match.equal(identify_print)
-# print("identify done")
-# del identify_match
-# del identify_print
+print("identifying")
+identify_match, identify_print = d.identify_sync(stored)
+assert identify_match.equal(identify_print)
+print("identify done")
+del identify_match
+del identify_print
 
-deserialized_prints = []
-for p in stored:
-    deserialized_prints.append(FPrint.Print.deserialize(p.serialize()))
-    assert deserialized_prints[-1].equal(p)
+print("deleting")
+d.delete_print_sync(stored[0])
+print("delete done")
+d.close_sync()
+
+del d
+del c
 del stored
+
+
+# Enroll and identify with deserialized data, as fprintd does
+
+c = FPrint.Context()
+c.enumerate()
+
+d = c.get_devices()[0]
+d.open_sync() == True
+template = FPrint.Print.new(d)
+
+print("enrolling")
+p = d.enroll_sync(template, None, enroll_progress, None)
+print("enroll done")
+
+deserialized_prints = [FPrint.Print.deserialize(p.serialize())]
+assert deserialized_prints[-1].equal(p)
+del p
 
 print('async identifying')
 d.identify(deserialized_prints, callback=identify_done)
@@ -66,11 +87,6 @@ del deserialized_prints
 while not identified:
     ctx.iteration(True)
 
-print("deleting")
-d.delete_print_sync(p)
-print("delete done")
-
-assert d.close_sync() == True
-
 del d
+
 del c

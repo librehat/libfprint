@@ -49,3 +49,37 @@ d.close_sync()
 
 del d
 del c
+
+identified = False
+
+def identify_done(dev, res):
+    global identified
+    identified = True
+    identify_match, identify_print = dev.identify_finish(res)
+    print('indentification_done: ', identify_match, identify_print)
+    assert identify_match.equal(identify_print)
+
+c = FPrint.Context()
+c.enumerate()
+
+d = c.get_devices()[0]
+d.open_sync() == True
+template = FPrint.Print.new(d)
+
+print("enrolling")
+p = d.enroll_sync(template, None, enroll_progress, None)
+print("enroll done")
+
+deserialized_prints = [FPrint.Print.deserialize(p.serialize())]
+assert deserialized_prints[-1].equal(p)
+del p
+
+print('async identifying')
+d.identify(deserialized_prints, callback=identify_done)
+del deserialized_prints
+
+while not identified:
+    ctx.iteration(True)
+
+del d
+

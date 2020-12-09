@@ -168,9 +168,10 @@ cmd_receive_cb (FpiUsbTransfer *transfer,
    * to match. */
   if (msg_resp.seq_num != self->cmd_seq_num)
     {
-      fp_warn ("Got unexpected sequence number from device, %d instead of %d",
+      fp_warn ("Got unexpected sequence number from device, %d instead of %d Payload length %u, content %p,",
                msg_resp.seq_num,
-               self->cmd_seq_num);
+               self->cmd_seq_num,
+               msg_resp.payload_len, msg_resp.payload);
     }
 
   if (callback)

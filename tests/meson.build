@@ -69,6 +69,7 @@ if get_option('introspection')
     foreach driver_test: drivers_tests
         driver_envs = envs
         driver_envs.set('FP_DRIVERS_WHITELIST', driver_test)
+        driver_envs.set('FP_TEST_DRIVER_NAME', driver_test)
 
         if driver_test in drivers and gusb_dep.version().version_compare('>= 0.3.0')
             test(driver_test,

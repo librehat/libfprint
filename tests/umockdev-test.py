@@ -76,6 +76,10 @@ def capture():
         # Compare the images, they need to be identical
         cmp_pngs(os.path.join(tmpdir, "capture.png"), os.path.join(ddir, "capture.png"))
 
+def storage_device():
+    subprocess.check_call(get_umockdev_runner("storage-device") +
+                          ['%s' % os.path.join(edir, "storage-device.py")])
+
 def custom():
     subprocess.check_call(get_umockdev_runner("custom") +
                           ['%s' % os.path.join(ddir, "custom.py")])
@@ -83,6 +87,9 @@ def custom():
 try:
     if os.path.exists(os.path.join(ddir, "capture.ioctl")):
         capture()
+
+    if os.path.exists(os.path.join(ddir, "storage-device.ioctl")):
+        storage_device()
 
     if os.path.exists(os.path.join(ddir, "custom.ioctl")):
         custom()

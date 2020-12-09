@@ -45,15 +45,22 @@ A new 'capture' test is created by means of `capture.py` script:
 
    `umockdev-record /dev/bus/usb/001/005 > DRIVER/device`
 
-5. Record interaction of `capture.py` (or other test) with the device:
+5. Record interaction of `capture.py` or `storage-device.py` (or other `custom.py` test) with the device:
 
-   `umockdev-record -i /dev/bus/usb/001/005=DRIVER/capture.ioctl -- python3 ./capture.py DRIVER/capture.png`
+   - `umockdev-record -i /dev/bus/usb/001/005=DRIVER/capture.ioctl -- python3 ./capture.py DRIVER/capture.png`
 
    Files `capture.ioctl` and `capture.png` will be created as the
    result of this command.
 
-6. Add driver's name to `drivers_tests` in the `meson.build`.
-7. Check whether everything works as expected.
+   - `umockdev-record -i /dev/bus/usb/001/005=DRIVER/capture.ioctl -- python3 ./storage-device.py`
+
+   File `capture.ioctl` will be created as the result of this command.
+
+6. Use the `convert-ioctl.py` script to cleanup the recording (see
+[#possible-issues](Possible Issues) for more infos)
+
+7. Add driver's name to `drivers_tests` in the `meson.build`.
+8. Check whether everything works as expected.
 
 **Note.** To avoid submitting a real fingerprint, the side of finger,
 arm, or anything else producing an image with the device can be used.
@@ -61,8 +68,9 @@ arm, or anything else producing an image with the device can be used.
 
 Possible Issues
 ---------------
-`umockdev-record` aggressively groups URBs. In most cases, manual
-intervention is unfortunately required. Often, drivers do a chain of
+`umockdev-record` aggressively groups URBs. While we provide a script to
+fix the most common issues, in most cases, manual intervention is unfortunately
+required. Often, drivers do a chain of
 commands like: A then B each with a different reply. However,
 `umockdev-record` could create a file like this:
 
@@ -89,6 +97,11 @@ Other changes may be needed to get everything working. For example the
 this case the driver works around it by interpreting the protocol
 error differently in the virtual environment (by means of
 `FP_DEVICE_EMULATION` environment variable).
+
+With synaptics instead, commandgroups `0000FE[0-9A-F]+` (starting from `0000FE01`)
+should always be preceed by the "sequence selector" `A7FE[0-9A-F]+` (starting from
+`A7FE01.*`), and it may happen that those ends being grouped at the end of the
+recording, and thus should be moved accordingly.
 
 
 [umockdev]: https://github.com/martinpitt/umockdev

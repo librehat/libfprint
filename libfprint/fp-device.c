@@ -898,6 +898,8 @@ on_list_check_completed (GObject      *obj,
   storage = fp_device_list_prints_finish (device, res, NULL);
   data = g_task_get_task_data (task);
 
+  g_print ("Got list returned %p\n", storage);
+
   if (storage)
     {
       g_autoptr(GPtrArray) gallery = NULL;
@@ -1115,6 +1117,8 @@ on_identify_completed (GObject      *obj,
   FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
   GCancellable *cancellable;
   FpMatchData *data;
+
+  g_print ("Identification completed!!! task is %p, %d\n", task, G_OBJECT (task)->ref_count);
 
   if (!fp_device_identify_finish (device, res, &match, NULL, &error))
     {

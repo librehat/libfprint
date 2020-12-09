@@ -20,6 +20,7 @@
 
 #define FP_COMPONENT "device"
 #include "fpi-log.h"
+#include "fpi-compat.h"
 
 #include "fp-device-private.h"
 
@@ -431,7 +432,11 @@ enroll_data_free (FpEnrollData *data)
 void
 match_data_free (FpMatchData *data)
 {
+  if (data->print)
+    g_print("data->print %p (count %d)\n", data->print, G_OBJECT(data->print)->ref_count);
   g_clear_object (&data->print);
+  if (data->match)
+    g_print("data->match %p (count %d)\n", data->match, G_OBJECT(data->match)->ref_count);
   g_clear_object (&data->match);
   g_clear_error (&data->error);
 
@@ -439,9 +444,17 @@ match_data_free (FpMatchData *data)
     data->match_destroy (data->match_data);
   data->match_data = NULL;
 
+  for (unsigned i = 0; data->gallery && i < data->gallery->len; i++)
+    g_print("Gallery has print %p\n", g_ptr_array_index (data->gallery, i));
+
+  for (unsigned i = 0; data->gallery && i < data->gallery->len; i++)
+    g_print("Gallery has print %p (%u)\n", g_ptr_array_index (data->gallery, i),
+      G_OBJECT(g_ptr_array_index (data->gallery, i))->ref_count);
+
   g_clear_object (&data->enrolled_print);
   g_clear_pointer (&data->gallery, g_ptr_array_unref);
 
+  g_print("Freeing data %p\n",data);
   g_free (data);
 }
 

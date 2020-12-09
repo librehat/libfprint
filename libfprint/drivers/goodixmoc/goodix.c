@@ -125,14 +125,14 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
       return;
     }
 
-  gx_proto_crc32_calc (transfer->buffer, PACKAGE_HEADER_SIZE + header.len, (uint8_t *) &crc32_calc);
-  if(crc32_calc != *(uint32_t *) (transfer->buffer + PACKAGE_HEADER_SIZE + header.len))
-    {
-      fpi_ssm_mark_failed (transfer->ssm,
-                           fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
-                                                     "Package crc check failed"));
-      return;
-    }
+  // gx_proto_crc32_calc (transfer->buffer, PACKAGE_HEADER_SIZE + header.len, (uint8_t *) &crc32_calc);
+  // if(crc32_calc != *(uint32_t *) (transfer->buffer + PACKAGE_HEADER_SIZE + header.len))
+  //   {
+  //     fpi_ssm_mark_failed (transfer->ssm,
+  //                          fpi_device_error_new_msg (FP_DEVICE_ERROR_PROTO,
+  //                                                    "Package crc check failed"));
+  //     return;
+  //   }
 
   cmd = MAKE_CMD_EX (header.cmd0, header.cmd1);
 

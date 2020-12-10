@@ -1,4 +1,4 @@
-libfprint (1:1.90.6-1) UNRELEASED; urgency=medium
+libfprint (1:1.90.6-1) unstable; urgency=medium
 
   * New upstream release:
     - fp_print_deserialize will now correctly return a sunken reference
@@ -24,7 +24,7 @@ libfprint (1:1.90.6-1) UNRELEASED; urgency=medium
     - Add upstream patch to avoid nbis library warnings.
       These have been checked to be harmless upstream
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 15:53:36 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 15:58:37 +0100
 
 libfprint (1:1.90.5-2) unstable; urgency=medium
 

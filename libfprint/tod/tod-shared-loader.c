@@ -127,6 +127,18 @@ fpi_tod_shared_drivers_register (void)
       fp_dbg ("Loading driver %s (%s)", cls->id, cls->full_name);
       g_array_append_val (shared_drivers, driver);
 
+      fp_dbg ("TOD driver implements usb_discover: %p", cls->usb_discover);
+      fp_dbg ("TOD driver implements probe: %p", cls->probe);
+      fp_dbg ("TOD driver implements open: %p", cls->open);
+      fp_dbg ("TOD driver implements close: %p", cls->close);
+      fp_dbg ("TOD driver implements enroll: %p", cls->enroll);
+      fp_dbg ("TOD driver implements verify: %p", cls->verify);
+      fp_dbg ("TOD driver implements identify: %p", cls->identify);
+      fp_dbg ("TOD driver implements capture: %p", cls->capture);
+      fp_dbg ("TOD driver implements list: %p", cls->list);
+      fp_dbg ("TOD driver implements delete: %p", cls->delete);
+      fp_dbg ("TOD driver implements cancel: %p", cls->cancel);
+
       shared_modules = g_list_prepend (shared_modules,
                                        g_steal_pointer (&module));
     }

@@ -1,3 +1,15 @@
+libfprint (1:1.90.6-1) UNRELEASED; urgency=medium
+
+  * New upstream release:
+    - fp_print_deserialize will now correctly return a sunken reference
+    - Object reference management fixes for FpPrint and identify
+    - Fixed issues that caused problem on non-x86 machines (#236)
+    - Fix building with older GLib versions
+    - synaptics: Support PID 00e7
+    - goodix: Fix issue with long USB packages
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 13:45:13 +0100
+
 libfprint (1:1.90.5-2) unstable; urgency=medium
 
   * d/p/fpi-device-Return-proper-type-on-identification-success.patch,

@@ -1,4 +1,4 @@
-libfprint (1:1.90.6+tod1-0ubuntu1) UNRELEASED; urgency=medium
+libfprint (1:1.90.6+tod1-0ubuntu1) hirsute; urgency=medium
 
   * New upstream release
     - fp_print_deserialize will now correctly return a sunken reference
@@ -11,7 +11,7 @@ libfprint (1:1.90.6+tod1-0ubuntu1) UNRELEASED; urgency=medium
   * debian/control: Remove Didier Raboud from uploaders
   * debian/rules: sync with debian (no change)
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 17:21:11 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 17:26:27 +0100
 
 libfprint (1:1.90.5+tod1-0ubuntu1) hirsute; urgency=medium
 

@@ -667,36 +667,25 @@ fp_print_serialize (FpPrint *print,
       for (i = 0; i < print->prints->len; i++)
         {
           struct xyt_struct *xyt = g_ptr_array_index (print->prints, i);
-          gint j;
-          gint32 *col = g_new (gint32, xyt->nrows);
 
           g_variant_builder_open (&nested, G_VARIANT_TYPE ("(aiaiai)"));
 
-          for (j = 0; j < xyt->nrows; j++)
-            col[j] = GINT32_TO_LE (xyt->xcol[j]);
           g_variant_builder_add_value (&nested,
                                        g_variant_new_fixed_array (G_VARIANT_TYPE_INT32,
-                                                                  col,
+                                                                  xyt->xcol,
                                                                   xyt->nrows,
-                                                                  sizeof (col[0])));
-
-          for (j = 0; j < xyt->nrows; j++)
-            col[j] = GINT32_TO_LE (xyt->ycol[j]);
+                                                                  sizeof (xyt->xcol[0])));
           g_variant_builder_add_value (&nested,
                                        g_variant_new_fixed_array (G_VARIANT_TYPE_INT32,
-                                                                  col,
+                                                                  xyt->ycol,
                                                                   xyt->nrows,
-                                                                  sizeof (col[0])));
-
-          for (j = 0; j < xyt->nrows; j++)
-            col[j] = GINT32_TO_LE (xyt->thetacol[j]);
+                                                                  sizeof (xyt->ycol[0])));
           g_variant_builder_add_value (&nested,
                                        g_variant_new_fixed_array (G_VARIANT_TYPE_INT32,
-                                                                  col,
+                                                                  xyt->thetacol,
                                                                   xyt->nrows,
-                                                                  sizeof (col[0])));
+                                                                  sizeof (xyt->thetacol[0])));
           g_variant_builder_close (&nested);
-          g_free (col);
         }
 
       g_variant_builder_close (&nested);
@@ -819,6 +808,7 @@ fp_print_deserialize (const guchar *data,
                              "device-id", device_id,
                              "device-stored", device_stored,
                              NULL);
+      g_object_ref_sink (result);
       fpi_print_set_type (result, FPI_PRINT_NBIS);
       for (i = 0; i < g_variant_n_children (prints); i++)
         {
@@ -868,6 +858,7 @@ fp_print_deserialize (const guchar *data,
                              "device-stored", device_stored,
                              "fpi-data", fp_data,
                              NULL);
+      g_object_ref_sink (result);
     }
   else
     {
@@ -886,8 +877,7 @@ fp_print_deserialize (const guchar *data,
   return g_steal_pointer (&result);
 
 invalid_format:
-  *error = g_error_new_literal (G_IO_ERROR,
-                                G_IO_ERROR_INVALID_DATA,
-                                "Data could not be parsed");
-  return FALSE;
+  g_set_error (error, G_IO_ERROR, G_IO_ERROR_INVALID_DATA,
+               "Data could not be parsed");
+  return NULL;
 }

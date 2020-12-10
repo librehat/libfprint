@@ -75,6 +75,7 @@ Description: async fingerprint library of fprint project, development headers
 Package: libfprint-2-doc
 Section: doc
 Architecture: all
+Multi-Arch: foreign
 Depends: ${misc:Depends}
 Description: async fingerprint library of fprint project, API documentation
  The fprint project aims to support for consumer fingerprint reader devices.

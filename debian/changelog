@@ -7,8 +7,24 @@ libfprint (1:1.90.6-1) UNRELEASED; urgency=medium
     - Fix building with older GLib versions
     - synaptics: Support PID 00e7
     - goodix: Fix issue with long USB packages
+  * debian/control:
+    - Remove Didier Raboud from uploaders (as he requested via bigon).
+    - Mark libfprint-2-doc as Multi-Arch: foreign
+  * debian/rules:
+    - Ignore tests failures in s390x as it now builds and tests correctly
+    - Increase testing timeout.
+  * debian/{control,rules,*.install}:
+    - Switch to debhelper 13 and use its features.
+      As per this restrict more the .install files wilcards
+  * debian/gbp.conf: Include suggested settings by GNOME team.
+    - Even if libfprint is not part of GNOME I think these settings are good
+      practice anyways.
+  * debian/patches:
+    - Refresh
+    - Add upstream patch to avoid nbis library warnings.
+      These have been checked to be harmless upstream
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 13:45:13 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 10 Dec 2020 15:53:36 +0100
 
 libfprint (1:1.90.5-2) unstable; urgency=medium
 

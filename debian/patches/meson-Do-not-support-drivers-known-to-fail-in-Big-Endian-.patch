@@ -26,7 +26,7 @@ Origin: https://gitlab.freedesktop.org/libfprint/libfprint/-/merge_requests/216
  2 files changed, 22 insertions(+), 2 deletions(-)
 
 diff --git a/meson.build b/meson.build
-index a2b849b..b35e57e 100644
+index 139c571..483f1ec 100644
 --- a/meson.build
 +++ b/meson.build
 @@ -89,6 +89,7 @@ cairo_dep = dependency('cairo', required: false)

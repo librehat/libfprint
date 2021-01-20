@@ -1,2 +1,7 @@
-meson-Do-not-support-drivers-known-to-fail-in-Big-Endian-.patch
 debian/Tweak-the-udev-rules-creator-for-Debian-usage.patch
+meson-Do-not-support-drivers-known-to-fail-in-Big-Endian-.patch
+udev-rules-Print-warning-if-an-ID-is-supported.patch
+udev-rules-Remove-supported-synaptics-devices.patch
+tests-Add-check-that-no-supported-device-is-whitelisted.patch
+udev-hwdb-Prevent-devices-from-being-listed-twice.patch
+debian/data-Use-auto-generated-but-hardcoded-autosuspend-rules-f.patch

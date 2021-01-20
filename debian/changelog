@@ -1,3 +1,9 @@
+libfprint (1:1.90.7-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 00:09:14 +0100
+
 libfprint (1:1.90.6-2) unstable; urgency=medium
 
   * d/p/meson-Do-not-support-drivers-known-to-fail-in-Big-Endian-.patch:

@@ -3,7 +3,7 @@ set -e
 
 srcdir="${GBP_SOURCES_DIR:-.}"
 debpath="$(dirname "$0")"
-autosuspend_file="$srcdir/data/autosuspend.hwdb"
+autosuspend_file="/tmp/autosuspend.hwdb"
 commands_lines=()
 
 while IFS= read -r line; do
@@ -18,7 +18,7 @@ export UDEVADM_TRIGGERS=$( IFS=$'\n'; echo -e "${commands_lines[*]}" )
 
 for i in $debpath/libfprint-*.post*.in; do
     out="${i%.in}"
-    envsubst < "$i" > "$out"
+    perl -pe 's/\@UDEVADM_TRIGGERS\@/`printenv UDEVADM_TRIGGERS`/e' "$i" > "$out"
 
     if [ -n "$GBP_BRANCH" ]; then
         if ! git diff-index --quiet HEAD -- "$out"; then

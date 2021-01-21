@@ -209,6 +209,7 @@ if [ "$1" = "configure" -o "$1" = "upgrade" ] && command -V udevadm >/dev/null 2
 	udevadm trigger --action=add --attr-match=idVendor=2808 --attr-match=idProduct=9338
 	udevadm trigger --action=add --attr-match=idVendor=298d --attr-match=idProduct=2033
 	udevadm trigger --action=add --attr-match=idVendor=3538 --attr-match=idProduct=0930
+
 fi
 
 exit 0

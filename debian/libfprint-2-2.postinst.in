@@ -11,7 +11,7 @@ if [ "$1" = "configure" -o "$1" = "upgrade" ] && command -V udevadm >/dev/null 2
 	# adds stuff there
 	# The devices ID list is auto-generated using the gbp postimport hook
 	# see debian/README.sources for more details.
-${UDEVADM_TRIGGERS}
+@UDEVADM_TRIGGERS@
 fi
 
 exit 0

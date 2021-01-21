@@ -176,7 +176,7 @@ endforeach
 
 supported_drivers = []
 foreach driver: drivers
-    if build_machine.endian() == 'little' or driver in endian_independent_drivers
+    if build_machine.endian() == 'big' or driver in endian_independent_drivers
         supported_drivers += driver
     else
         warning('Driver @0@ is not supported by big endian cpu @1@. Please, fix it!'.format(

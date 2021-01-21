@@ -4,5 +4,6 @@ udev-rules-Print-warning-if-an-ID-is-supported.patch
 udev-rules-Remove-supported-synaptics-devices.patch
 tests-Add-check-that-no-supported-device-is-whitelisted.patch
 udev-hwdb-Prevent-devices-from-being-listed-twice.patch
-debian/data-Use-auto-generated-but-hardcoded-autosuspend-rules-f.patch
 tests-Add-trailing-newline-to-busname-devname-sysfs-attri.patch
+build-Skip-the-hwdb-test-if-not-all-drivers-are-really-en.patch
+debian/data-Use-auto-generated-but-hardcoded-autosuspend-rules-f.patch

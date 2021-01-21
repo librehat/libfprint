@@ -5,3 +5,4 @@ udev-rules-Remove-supported-synaptics-devices.patch
 tests-Add-check-that-no-supported-device-is-whitelisted.patch
 udev-hwdb-Prevent-devices-from-being-listed-twice.patch
 debian/data-Use-auto-generated-but-hardcoded-autosuspend-rules-f.patch
+tests-Add-trailing-newline-to-busname-devname-sysfs-attri.patch

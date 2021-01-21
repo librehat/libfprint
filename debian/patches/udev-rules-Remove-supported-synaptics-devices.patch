@@ -7,7 +7,7 @@ Subject: udev-rules: Remove supported synaptics devices
  1 file changed, 3 deletions(-)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index 57aa5e6..af289da 100644
+index 5f80fe1..e574cac 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
 @@ -45,12 +45,9 @@ static const FpIdEntry whitelist_id_table[] = {

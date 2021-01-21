@@ -11,10 +11,10 @@ is listed by two independent drivers.
  1 file changed, 4 insertions(+), 3 deletions(-)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index af289da..cba2b2f 100644
+index e574cac..050a450 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
-@@ -133,10 +133,11 @@ print_driver (const FpDeviceClass *cls)
+@@ -136,10 +136,11 @@ print_driver (const FpDeviceClass *cls)
  
        key = g_strdup_printf ("%04x:%04x", entry->vid, entry->pid);
  

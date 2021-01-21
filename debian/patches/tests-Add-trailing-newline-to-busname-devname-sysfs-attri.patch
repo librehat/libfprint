@@ -6,8 +6,6 @@ libusb 1.0.24 now expects busnum/devnum to be \n terminated. Update the
 device descriptions accordingly.
 
 https://github.com/martinpitt/umockdev/issues/115
-
-Origin: https://gitlab.freedesktop.org/libfprint/libfprint/-/merge_requests/240
 ---
  tests/aes3500/device   | 16 ++++++++--------
  tests/elan/device      | 12 ++++++------

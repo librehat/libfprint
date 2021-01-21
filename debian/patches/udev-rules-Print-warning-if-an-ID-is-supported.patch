@@ -7,7 +7,7 @@ Subject: udev-rules: Print warning if an ID is supported
  1 file changed, 5 insertions(+), 2 deletions(-)
 
 diff --git a/libfprint/fprint-list-udev-rules.c b/libfprint/fprint-list-udev-rules.c
-index 3b6f572..57aa5e6 100644
+index d6c884c..5f80fe1 100644
 --- a/libfprint/fprint-list-udev-rules.c
 +++ b/libfprint/fprint-list-udev-rules.c
 @@ -110,6 +110,7 @@ static const FpIdEntry blacklist_id_table[] = {
@@ -18,7 +18,7 @@ index 3b6f572..57aa5e6 100644
    .full_name = "Hardcoded whitelist"
  };
  
-@@ -135,13 +136,15 @@ print_driver (const FpDeviceClass *cls)
+@@ -138,13 +139,15 @@ print_driver (const FpDeviceClass *cls)
  
        key = g_strdup_printf ("%04x:%04x", entry->vid, entry->pid);
  

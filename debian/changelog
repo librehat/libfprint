@@ -1,14 +1,16 @@
 libfprint (1:1.90.7-3) UNRELEASED; urgency=medium
 
   * gbp.conf: Prepare for experimental branching
-  * debian/patches: Use hwdb to store device autosuspend rules and drop debian specifics.
-    Upstream will use an hwdb to store the device autosuspend (that will be
-    included in systemd also, so libfprint packagin may stop shipping it at
-    later point), so use it earlier.
-    Drop the debian specific rules to set the devices part of the `plugdev`
-    group as such devices should not be ever readable by an user, but the
-    access should be managed through a libfprint-based service (frpintd at
-    the date).
+  * debian/patches:
+    - Use hwdb to store device autosuspend rules and drop debian specifics.
+      Upstream will use an hwdb to store the device autosuspend (that will be
+      included in systemd also, so libfprint packagin may stop shipping it at
+      later point), so use it earlier.
+      Drop the debian specific rules to set the devices part of the `plugdev`
+      group as such devices should not be ever readable by an user, but the
+      access should be managed through a libfprint-based service (frpintd at
+      the date).
+    - Explicitly mark libfprint as a shared library
   * libfprint-2-2.install: Install hwdb file
   * debian/rules:
     - Do not autorename upstream rules file anymore.
@@ -18,7 +20,7 @@ libfprint (1:1.90.7-3) UNRELEASED; urgency=medium
       This is now generated correctly by upstream, so no need to drop anything
       from it.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 17:42:01 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 17:45:42 +0100
 
 libfprint (1:1.90.7-2) unstable; urgency=medium
 

@@ -14,9 +14,10 @@ while IFS= read -r line; do
     fi
 done < "$autosuspend_file"
 
-export UDEVADM_TRIGGERS=$( IFS=$'\n'; echo -e "${commands_lines[*]}" )
+UDEVADM_TRIGGERS=$( IFS=$'\n'; echo -e "${commands_lines[*]}" )
+export UDEVADM_TRIGGERS
 
-for i in $debpath/libfprint-*.post*.in; do
+for i in "$debpath"/libfprint-*.post*.in; do
     out="${i%.in}"
     perl -pe 's/\@UDEVADM_TRIGGERS\@/`printenv UDEVADM_TRIGGERS`/e' "$i" > "$out"
 

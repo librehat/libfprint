@@ -1,4 +1,4 @@
-libfprint (1:1.90.7-3) UNRELEASED; urgency=medium
+libfprint (1:1.90.7-3) experimental; urgency=medium
 
   * gbp.conf: Prepare for experimental branching
   * debian/patches:
@@ -25,7 +25,7 @@ libfprint (1:1.90.7-3) UNRELEASED; urgency=medium
     Blacklisted devices can be now removed from the trigger list as we don't
     add them to plugdev anymore.
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 19:32:04 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 19:53:12 +0100
 
 libfprint (1:1.90.7-2) unstable; urgency=medium
 

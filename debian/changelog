@@ -1,8 +1,18 @@
 libfprint (1:1.90.7-1) UNRELEASED; urgency=medium
 
-  * New upstream release
+  * New upstream release:
+    - vfs5011: Fix possible use-after-free
+    - goodixmoc: Add two new PIDs (0x63AC, 0x639C)
+    - goodixmoc: Support finger status API
+    - synaptics: Only identify within provided prints
+    - synaptics: Reject devices with old firmware during probe (#239)
+  * debian/patches:
+    - Refresh, dropping merged
+    - Include upstream udev fixes and use hardcoded rules
+    - Ensure that umockdev tests will pass with libusb 1.0.24
+      (Closes: #977848, #978256)
 
- -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 00:09:14 +0100
+ -- Marco Trevisan (Treviño) <marco@ubuntu.com>  Thu, 21 Jan 2021 13:33:57 +0100
 
 libfprint (1:1.90.6-2) unstable; urgency=medium
 

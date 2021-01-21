@@ -11,3 +11,4 @@ build-Ensure-we-process-the-data-dir.patch
 data-Keep-using-versioned-libname-for-hwdb-file.patch
 tests-Add-trailing-newline-to-busname-devname-sysfs-attri.patch
 build-Skip-the-hwdb-test-if-not-all-drivers-are-really-en.patch
+build-Explicitly-mark-libfprint-as-a-shared-library.patch

@@ -102,8 +102,15 @@ class VirtualDevice(unittest.TestCase):
         while ctx.pending():
             ctx.iteration(False)
 
-    def send_finger_report(self, has_finger):
+    def send_finger_report(self, has_finger, iterate=True):
         self.send_command('FINGER', 1 if has_finger else 0)
+
+        if iterate:
+            expected = (FPrint.FingerStatusFlags.PRESENT if has_finger
+                else ~FPrint.FingerStatusFlags.PRESENT)
+
+            while not (self.dev.get_finger_status() & expected):
+                ctx.iteration(True)
 
     def enroll_print(self, nick, finger, username='testuser'):
         self._enrolled = None
@@ -198,10 +205,28 @@ class VirtualDevice(unittest.TestCase):
             self.check_verify(matching, 0, match=False)
 
     def test_finger_status(self):
+        cancellable = Gio.Cancellable()
+        got_cb = False
+
+        def verify_cb(dev, res):
+            nonlocal got_cb
+            got_cb = True
+
+        self.dev.verify(FPrint.Print.new(self.dev), callback=verify_cb, cancellable=cancellable)
+        while not self.dev.get_finger_status() is FPrint.FingerStatusFlags.NEEDED:
+            ctx.iteration(True)
+
         self.send_finger_report(True)
-        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.PRESENT)
+        self.assertEqual(self.dev.get_finger_status(),
+            FPrint.FingerStatusFlags.NEEDED | FPrint.FingerStatusFlags.PRESENT)
 
         self.send_finger_report(False)
+        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NEEDED)
+
+        cancellable.cancel()
+        while not got_cb:
+            ctx.iteration(True)
+
         self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NONE)
 
 class VirtualDeviceStorage(VirtualDevice):

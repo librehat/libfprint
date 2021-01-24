@@ -49,6 +49,8 @@ process_cmds (FpDeviceVirtualDevice * self, gboolean scan, GError **error)
     {
       gchar *cmd = g_ptr_array_index (self->pending_commands, 0);
 
+      g_debug ("Processing command %s", cmd);
+
       /* These are always processed. */
       if (g_str_has_prefix (cmd, INSERT_CMD_PREFIX))
         {
@@ -69,6 +71,18 @@ process_cmds (FpDeviceVirtualDevice * self, gboolean scan, GError **error)
           g_ptr_array_remove_index (self->pending_commands, 0);
           continue;
         }
+      else if (scan && g_str_has_prefix (cmd, FINGER_CMD_PREFIX))
+        {
+          gboolean finger_present;
+
+          finger_present = g_ascii_strtoull (cmd + strlen (FINGER_CMD_PREFIX), NULL, 10) != 0;
+          fpi_device_report_finger_status_changes (FP_DEVICE (self),
+                                                   finger_present ? FP_FINGER_STATUS_PRESENT : FP_FINGER_STATUS_NONE,
+                                                   finger_present ? FP_FINGER_STATUS_NONE : FP_FINGER_STATUS_PRESENT);
+
+          g_ptr_array_remove_index (self->pending_commands, 0);
+          continue;
+        }
 
       /* If we are not scanning, then we have to stop here. */
       if (!scan)
@@ -85,6 +99,14 @@ process_cmds (FpDeviceVirtualDevice * self, gboolean scan, GError **error)
         {
           g_propagate_error (error,
                              fpi_device_error_new (g_ascii_strtoull (cmd + strlen (ERROR_CMD_PREFIX), NULL, 10)));
+
+          g_ptr_array_remove_index (self->pending_commands, 0);
+          return NULL;
+        }
+      else if (g_str_has_prefix (cmd, RETRY_CMD_PREFIX))
+        {
+          g_propagate_error (error,
+                             fpi_device_retry_new (g_ascii_strtoull (cmd + strlen (RETRY_CMD_PREFIX), NULL, 10)));
 
           g_ptr_array_remove_index (self->pending_commands, 0);
           return NULL;
@@ -146,15 +168,6 @@ recv_instruction_cb (GObject      *source_object,
         {
           if (self->prints_storage)
             g_hash_table_foreach (self->prints_storage, write_key_to_listener, listener);
-        }
-      else if (g_str_has_prefix (cmd, FINGER_CMD_PREFIX))
-        {
-          gboolean finger_present;
-
-          finger_present = g_ascii_strtoull (cmd + strlen (FINGER_CMD_PREFIX), NULL, 10) != 0;
-          fpi_device_report_finger_status_changes (FP_DEVICE (self),
-                                                   finger_present ? FP_FINGER_STATUS_PRESENT : FP_FINGER_STATUS_NONE,
-                                                   finger_present ? FP_FINGER_STATUS_NONE : FP_FINGER_STATUS_PRESENT);
         }
       else
         {

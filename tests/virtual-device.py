@@ -127,6 +127,7 @@ class VirtualDevice(unittest.TestCase):
             if not self._enrolled:
                 self.assertEqual(self.dev.get_finger_status(),
                     FPrint.FingerStatusFlags.NEEDED)
+                self.send_command('SCAN', nick)
 
         self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NONE)
 

@@ -74,6 +74,9 @@ dev_identify (FpDevice *dev)
                                   NULL);
     }
 
+  if (error && error->domain == FP_DEVICE_RETRY)
+    fpi_device_identify_report (dev, NULL, NULL, g_steal_pointer (&error));
+
   fpi_device_identify_complete (dev, g_steal_pointer (&error));
 }
 

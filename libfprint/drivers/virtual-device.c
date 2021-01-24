@@ -39,6 +39,7 @@ G_DEFINE_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP_TYPE_DEVICE)
 #define REMOVE_CMD_PREFIX "REMOVE "
 #define SCAN_CMD_PREFIX "SCAN "
 #define ERROR_CMD_PREFIX "ERROR "
+#define RETRY_CMD_PREFIX "RETRY "
 
 #define LIST_CMD "LIST"
 
@@ -315,6 +316,9 @@ dev_verify (FpDevice *dev)
     {
       g_debug ("Virtual device scan failed with error: %s", error->message);
     }
+
+  if (error && error->domain == FP_DEVICE_RETRY)
+    fpi_device_verify_report (dev, FPI_MATCH_ERROR, NULL, g_steal_pointer (&error));
 
   fpi_device_verify_complete (dev, g_steal_pointer (&error));
 }

@@ -71,6 +71,7 @@ recv_image_img_recv_cb (GObject      *source_object,
   self = FPI_DEVICE_VIRTUAL_IMAGE (user_data);
   device = FP_IMAGE_DEVICE (self);
 
+  g_debug ("AUTOMATIC FINGER %d\n", self->automatic_finger);
   if (self->automatic_finger)
     fpi_image_device_report_finger_status (device, TRUE);
   fpi_image_device_image_captured (device, g_steal_pointer (&self->recv_img));
@@ -131,10 +132,13 @@ recv_image_hdr_recv_cb (GObject      *source_object,
 
         case -3:
           /* -3 sets/clears automatic finger detection for images */
+          g_print ("SETTING FINGER AUTO: %x: %d", self->recv_img_hdr[1],
+                   !!self->recv_img_hdr[1]);
           self->automatic_finger = !!self->recv_img_hdr[1];
           break;
 
         case -4:
+          g_print ("SETTING FINGER STATUS: %x", self->recv_img_hdr[1]);
           /* -4 submits a finger detection report */
           fpi_image_device_report_finger_status (FP_IMAGE_DEVICE (self),
                                                  !!self->recv_img_hdr[1]);

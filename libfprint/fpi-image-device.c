@@ -190,6 +190,9 @@ fp_image_device_maybe_complete_action (FpImageDevice *self, GError *error)
         }
     }
 
+  g_debug ("Complating action %d: active %d, minutiae %d", fpi_device_get_current_action (self),
+           priv->active, priv->minutiae_scan_active);
+
   /* Do not complete if the device is still active or a minutiae scan is pending. */
   if (priv->active || priv->minutiae_scan_active)
     return;
@@ -252,6 +255,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       /* Cancel operation . */
       if (g_error_matches (error, G_IO_ERROR, G_IO_ERROR_CANCELLED))
         {
+          g_debug ("REQ Complating action %s", G_STRLOC);
           fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
           fpi_image_device_deactivate (self, TRUE);
           return;
@@ -269,6 +273,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
   if (action == FPI_DEVICE_ACTION_CAPTURE)
     {
       priv->capture_image = g_steal_pointer (&image);
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
       return;
     }
@@ -283,6 +288,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
 
           if (error->domain != FP_DEVICE_RETRY)
             {
+              g_debug ("REQ Complating action %s", G_STRLOC);
               fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
               /* We might not yet be deactivating, if we are enrolling. */
               fpi_image_device_deactivate (self, TRUE);
@@ -308,6 +314,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       /* Start another scan or deactivate. */
       if (priv->enroll_stage == IMG_ENROLL_STAGES)
         {
+          g_debug ("REQ Complating action %s", G_STRLOC);
           fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
           fpi_image_device_deactivate (self, FALSE);
         }
@@ -330,6 +337,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       if (!error || error->domain == FP_DEVICE_RETRY)
         fpi_device_verify_report (device, result, g_steal_pointer (&print), g_steal_pointer (&error));
 
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
     }
   else if (action == FPI_DEVICE_ACTION_IDENTIFY)
@@ -353,6 +361,7 @@ fpi_image_device_minutiae_detected (GObject *source_object, GAsyncResult *res, g
       if (!error || error->domain == FP_DEVICE_RETRY)
         fpi_device_identify_report (device, result, g_steal_pointer (&print), g_steal_pointer (&error));
 
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, g_steal_pointer (&error));
     }
   else
@@ -543,13 +552,14 @@ fpi_image_device_retry_scan (FpImageDevice *self, FpDeviceRetry retry)
   else if (action == FPI_DEVICE_ACTION_VERIFY)
     {
       fpi_device_verify_report (FP_DEVICE (self), FPI_MATCH_ERROR, NULL, error);
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, NULL);
       fpi_image_device_deactivate (self, TRUE);
-
     }
   else if (action == FPI_DEVICE_ACTION_IDENTIFY)
     {
       fpi_device_identify_report (FP_DEVICE (self), NULL, NULL, error);
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, NULL);
       fpi_image_device_deactivate (self, TRUE);
     }
@@ -557,6 +567,7 @@ fpi_image_device_retry_scan (FpImageDevice *self, FpDeviceRetry retry)
     {
       /* The capture case where there is no early reporting. */
       g_debug ("Abort current operation due to retry (no early-reporting)");
+      g_debug ("REQ Complating action %s", G_STRLOC);
       fp_image_device_maybe_complete_action (self, error);
       fpi_image_device_deactivate (self, TRUE);
     }
@@ -617,6 +628,7 @@ fpi_image_device_session_error (FpImageDevice *self, GError *error)
   if (error->domain == FP_DEVICE_RETRY)
     g_warning ("Driver should report retries using fpi_image_device_retry_scan!");
 
+  g_debug ("REQ Complating action %s", G_STRLOC);
   fp_image_device_maybe_complete_action (self, error);
   fpi_image_device_deactivate (self, TRUE);
 }
@@ -684,6 +696,7 @@ fpi_image_device_deactivate_complete (FpImageDevice *self, GError *error)
 
   fp_image_device_change_state (self, FPI_IMAGE_DEVICE_STATE_INACTIVE);
 
+  g_debug ("REQ Complating action %s", G_STRLOC);
   fp_image_device_maybe_complete_action (self, error);
 }
 

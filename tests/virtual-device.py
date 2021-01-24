@@ -157,6 +157,7 @@ class VirtualDevice(unittest.TestCase):
         self._verify_fp = None
         self._verify_error = None
 
+        """ else if isinstance(scan_nick, Fprint.Device.error....) """
         if isinstance(scan_nick, str):
             self.send_command('SCAN', scan_nick)
         else:

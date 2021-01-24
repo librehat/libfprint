@@ -35,6 +35,7 @@
 G_DEFINE_TYPE (FpDeviceVirtualDevice, fpi_device_virtual_device, FP_TYPE_DEVICE)
 
 #define INSERT_CMD_PREFIX "INSERT "
+#define FINGER_CMD_PREFIX "FINGER "
 #define REMOVE_CMD_PREFIX "REMOVE "
 #define SCAN_CMD_PREFIX "SCAN "
 #define ERROR_CMD_PREFIX "ERROR "
@@ -145,6 +146,15 @@ recv_instruction_cb (GObject      *source_object,
         {
           if (self->prints_storage)
             g_hash_table_foreach (self->prints_storage, write_key_to_listener, listener);
+        }
+      else if (g_str_has_prefix (cmd, FINGER_CMD_PREFIX))
+        {
+          gboolean finger_present;
+
+          finger_present = g_ascii_strtoull (cmd + strlen (FINGER_CMD_PREFIX), NULL, 10) != 0;
+          fpi_device_report_finger_status_changes (FP_DEVICE (self),
+                                                   finger_present ? FP_FINGER_STATUS_PRESENT : FP_FINGER_STATUS_NONE,
+                                                   finger_present ? FP_FINGER_STATUS_NONE : FP_FINGER_STATUS_PRESENT);
         }
       else
         {

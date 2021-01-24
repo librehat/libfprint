@@ -93,7 +93,7 @@ class VirtualDevice(unittest.TestCase):
         super().tearDown()
 
     def send_command(self, command, *args):
-        self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR'])
+        self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'FINGER'])
 
         with Connection(self.sockaddr) as con:
             params = ' '.join(str(p) for p in args)
@@ -102,12 +102,17 @@ class VirtualDevice(unittest.TestCase):
         while ctx.pending():
             ctx.iteration(False)
 
+    def send_finger_report(self, has_finger):
+        self.send_command('FINGER', 1 if has_finger else 0)
+
     def enroll_print(self, nick, finger, username='testuser'):
         self._enrolled = None
 
         def done_cb(dev, res):
             print("Enroll done")
             self._enrolled = dev.enroll_finish(res)
+
+        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NONE)
 
         self.send_command('SCAN', nick)
 
@@ -118,6 +123,12 @@ class VirtualDevice(unittest.TestCase):
         self.dev.enroll(template, None, None, tuple(), done_cb)
         while self._enrolled is None:
             ctx.iteration(False)
+
+            if not self._enrolled:
+                self.assertEqual(self.dev.get_finger_status(),
+                    FPrint.FingerStatusFlags.NEEDED)
+
+        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NONE)
 
         self.assertEqual(self._enrolled.get_device_stored(),
             self.dev.has_storage())
@@ -179,13 +190,18 @@ class VirtualDevice(unittest.TestCase):
 
         self.check_verify(matching, 'not-testprint', match=False)
 
-
     def test_enroll_verify_error(self):
         matching = self.enroll_print('testprint', FPrint.Finger.LEFT_RING)
 
         with self.assertRaisesRegex(GLib.Error, r"An unspecified error occurred"):
             self.check_verify(matching, 0, match=False)
 
+    def test_finger_status(self):
+        self.send_finger_report(True)
+        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.PRESENT)
+
+        self.send_finger_report(False)
+        self.assertEqual(self.dev.get_finger_status(), FPrint.FingerStatusFlags.NONE)
 
 class VirtualDeviceStorage(VirtualDevice):
 

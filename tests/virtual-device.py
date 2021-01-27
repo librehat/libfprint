@@ -609,6 +609,11 @@ class VirtualDeviceStorage(VirtualDevice):
         self.assertFalse(self.dev.supports_capture())
         self.assertTrue(self.dev.has_storage())
 
+    def test_duplicate_enroll(self):
+        self.enroll_print('testprint', FPrint.Finger.LEFT_LITTLE)
+        with self.assertRaisesRegex(GLib.Error, 'finger has already enrolled'):
+            self.enroll_print('testprint', FPrint.Finger.LEFT_LITTLE)
+
     def test_list_empty(self):
         self.assertFalse(self.dev.list_prints_sync())
 

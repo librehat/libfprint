@@ -515,6 +515,7 @@ class VirtualDevice(VirtualDeviceBase):
             ctx.iteration(True)
 
         self.assertEqual(enrolled.get_driver(), self.dev.get_driver())
+        self.assertEqual(enrolled.props.fpi_data.unpack(), 'print-id')
 
     def test_enroll_script(self):
         self.send_command('SET_ENROLL_STAGES', 8)
@@ -537,6 +538,7 @@ class VirtualDevice(VirtualDeviceBase):
 
         enrolled = self.dev.enroll_sync(FPrint.Print.new(self.dev))
         self.assertEqual(enrolled.get_driver(), self.dev.get_driver())
+        self.assertEqual(enrolled.props.fpi_data.unpack(), 'print-id')
 
     def test_finger_status(self):
         self.start_verify(FPrint.Print.new(self.dev),

@@ -337,11 +337,14 @@ dev_init (FpDevice *dev)
   g_autoptr(FpDeviceVirtualListener) listener = NULL;
   FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (dev);
 
+  g_print ("Starting open %s\n", G_STRLOC);
+
   G_DEBUG_HERE ();
 
   process_cmds (self, FALSE, &error);
   if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
     {
+      g_print ("Completing open %s\n", G_STRLOC);
       fpi_device_open_complete (dev, g_steal_pointer (&error));
       return;
     }
@@ -372,6 +375,7 @@ dev_init (FpDevice *dev)
   self->listener = g_steal_pointer (&listener);
   self->cancellable = g_steal_pointer (&cancellable);
 
+  g_print ("Completing open %s\n", G_STRLOC);
   fpi_device_open_complete (dev, NULL);
 }
 
@@ -714,9 +718,12 @@ dev_deinit (FpDevice *dev)
   g_autoptr(GError) error = NULL;
   FpDeviceVirtualDevice *self = FP_DEVICE_VIRTUAL_DEVICE (dev);
 
+  g_print ("Starting close %s\n", G_STRLOC);
+
   process_cmds (self, FALSE, &error);
   if (error && !g_error_matches (error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND))
     {
+      g_print ("CLOSE COMPLETE %s\n", G_STRLOC);
       fpi_device_close_complete (dev, g_steal_pointer (&error));
       return;
     }
@@ -731,6 +738,7 @@ dev_deinit (FpDevice *dev)
   if (!self->keep_alive)
     stop_listener (self);
 
+  g_print ("CLOSE COMPLETE %s\n", G_STRLOC);
   fpi_device_close_complete (dev, NULL);
 }
 

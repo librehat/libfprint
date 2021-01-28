@@ -123,7 +123,7 @@ class VirtualDeviceBase(unittest.TestCase):
     def send_command(self, command, *args):
         self.assertIn(command, ['INSERT', 'REMOVE', 'SCAN', 'ERROR', 'RETRY',
             'FINGER', 'UNPLUG', 'SLEEP', 'SET_ENROLL_STAGES', 'SET_SCAN_TYPE',
-            'SET_CANCELLATION_ENABLED', 'IGNORED_COMMAND'])
+            'SET_CANCELLATION_ENABLED', 'SET_KEEP_ALIVE', 'IGNORED_COMMAND'])
 
         with Connection(self.sockaddr) as con:
             params = ' '.join(str(p) for p in args)
@@ -161,6 +161,9 @@ class VirtualDeviceBase(unittest.TestCase):
             self.send_command('SET_SCAN_TYPE', obj.value_nick)
         else:
             raise Exception('No known type found for {}'.format(obj))
+
+    def set_keep_alive(self, value):
+        self.send_command('SET_KEEP_ALIVE', 1 if value else 0)
 
     def send_sleep(self, interval):
         self.assertGreater(interval, 0)
@@ -358,6 +361,15 @@ class VirtualDevice(VirtualDeviceBase):
         with self.assertRaisesRegex(GLib.Error, 'The driver encountered a protocol error'):
             self.dev.open_sync()
 
+    def test_open_error_with_keep_alive(self):
+        self._close_on_teardown = False
+        self.set_keep_alive(True)
+        self.dev.close_sync()
+
+        self.send_error(FPrint.DeviceError.PROTO)
+        with self.assertRaisesRegex(GLib.Error, 'The driver encountered a protocol error'):
+            self.dev.open_sync()
+
     def test_delayed_open(self):
         self.send_command('IGNORED_COMMAND') # This will be consumed by close
         self.send_sleep(500) # This will be consumed by open
@@ -372,6 +384,28 @@ class VirtualDevice(VirtualDeviceBase):
             dev.open_finish(res)
             opened = True
 
+        self.dev.open(callback=on_opened)
+
+        self.wait_timeout(10)
+        self.assertFalse(self.dev.is_open())
+
+        self.wait_timeout(10)
+        self.assertFalse(self.dev.is_open())
+
+        while not opened:
+            ctx.iteration(True)
+
+    def test_delayed_open_with_keep_alive(self):
+        self.set_keep_alive(True)
+        self.dev.close_sync()
+
+        opened = False
+        def on_opened(dev, res):
+            nonlocal opened
+            dev.open_finish(res)
+            opened = True
+
+        self.send_sleep(500)
         self.dev.open(callback=on_opened)
 
         self.wait_timeout(10)
@@ -791,15 +825,13 @@ class VirtualDeviceBusyDeviceOperations(VirtualDeviceBase):
         super().tearDown()
 
     def test_open(self):
-        self.send_command('IGNORED_COMMAND')
-        self.send_sleep(100)
+        self.set_keep_alive(True)
 
-        with GLibErrorMessage('libfprint-virtual_device',
-            GLib.LogLevelFlags.LEVEL_WARNING, 'Could not process command: *'):
-            while self.dev.is_open():
-                ctx.iteration(True)
+        while self.dev.is_open():
+            ctx.iteration(True)
 
         self.assertFalse(self.dev.is_open())
+        self.send_sleep(100)
         self.dev.open()
         with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
             self.dev.open_sync()

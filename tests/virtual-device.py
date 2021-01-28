@@ -62,7 +62,7 @@ class GLibErrorMessage:
         GLib.test_assert_expected_messages_internal(self.component,
             filename, line, procname)
 
-class VirtualDevice(unittest.TestCase):
+class VirtualDeviceBase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -325,6 +325,9 @@ class VirtualDevice(unittest.TestCase):
 
         if isinstance(scan_nick, str):
             self.assertEqual(self._verify_fp.props.fpi_data.get_string(), scan_nick)
+
+
+class VirtualDevice(VirtualDeviceBase):
 
     def test_device_properties(self):
         self.assertEqual(self.dev.get_driver(), 'virtual_device')
@@ -650,6 +653,90 @@ class VirtualDevice(unittest.TestCase):
             ctx.iteration(True)
 
         self.assertEqual(close_res.code, int(FPrint.DeviceError.BUSY))
+
+
+class VirtualDeviceClosed(VirtualDeviceBase):
+
+    driver_name = 'virtual_device'
+
+    def setUp(self):
+        super().setUp()
+        self._close_on_teardown = False
+        self.dev.close_sync()
+        self.assertFalse(self.dev.is_open())
+
+    def test_close(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.close_sync()
+
+    def test_enroll(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.enroll_sync(FPrint.Print.new(self.dev))
+
+    def test_verify(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.verify_sync(FPrint.Print.new(self.dev))
+
+    def test_identify(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.identify_sync([FPrint.Print.new(self.dev)])
+
+    def test_capture(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.capture_sync(wait_for_finger=False)
+
+    def test_delete_print(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.delete_print_sync(FPrint.Print.new(self.dev))
+
+    def test_list_prints(self):
+        with self.assertRaisesRegex(GLib.Error, 'device needs to be opened'):
+            self.dev.list_prints_sync()
+
+
+class VirtualDeviceBusyDeviceOperations(VirtualDeviceBase):
+
+    driver_name = 'virtual_device'
+
+    def setUp(self):
+        super().setUp()
+        self._close_on_teardown = False
+        self.send_sleep(200)
+        self.dev.close()
+
+    def tearDown(self):
+        while self.dev.is_open():
+            ctx.iteration(True)
+        super().tearDown()
+
+    def test_close(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.close_sync()
+
+    def test_enroll(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.enroll_sync(FPrint.Print.new(self.dev))
+
+    def test_verify(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.verify_sync(FPrint.Print.new(self.dev))
+
+    def test_identify(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.identify_sync([FPrint.Print.new(self.dev)])
+
+    def test_capture(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.capture_sync(wait_for_finger=False)
+
+    def test_delete_print(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.delete_print_sync(FPrint.Print.new(self.dev))
+
+    def test_list_prints(self):
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.list_prints_sync()
+
 
 class VirtualDeviceStorage(VirtualDevice):
 

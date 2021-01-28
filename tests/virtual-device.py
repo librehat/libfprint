@@ -709,6 +709,26 @@ class VirtualDeviceBusyDeviceOperations(VirtualDeviceBase):
             ctx.iteration(True)
         super().tearDown()
 
+    def test_open(self):
+        self.send_command('IGNORED_COMMAND')
+        self.send_sleep(100)
+
+        with GLibErrorMessage('libfprint-virtual_device',
+            GLib.LogLevelFlags.LEVEL_WARNING, 'Could not process command: *'):
+            while self.dev.is_open():
+                ctx.iteration(True)
+
+        self.assertFalse(self.dev.is_open())
+        self.dev.open()
+        with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
+            self.dev.open_sync()
+
+        self.assertFalse(self.dev.is_open())
+        while not self.dev.is_open():
+            ctx.iteration(True)
+
+        self.dev.close_sync()
+
     def test_close(self):
         with self.assertRaisesRegex(GLib.Error, 'device is still busy'):
             self.dev.close_sync()

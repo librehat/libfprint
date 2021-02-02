@@ -694,6 +694,12 @@ dev_cancel (FpDevice *dev)
   if (!self->supports_cancellation)
     return;
 
+  if (!self->sleep_timeout_id && should_wait_to_sleep (self, NULL, NULL))
+    {
+      while (self->sleep_timeout_id)
+        g_main_context_iteration (NULL, FALSE);
+    }
+
   g_debug ("Got cancellation!");
   g_clear_handle_id (&self->sleep_timeout_id, g_source_remove);
 

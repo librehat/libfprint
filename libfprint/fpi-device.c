@@ -709,6 +709,7 @@ clear_device_cancel_action (FpDevice *device)
   FpDevicePrivate *priv = fp_device_get_instance_private (device);
 
   g_clear_pointer (&priv->current_idle_cancel_source, g_source_destroy);
+  g_clear_pointer (&priv->current_wait_source, g_source_destroy);
 
   if (priv->current_cancellable_id)
     {

@@ -46,6 +46,7 @@ typedef struct
   GTask              *current_task;
   GAsyncReadyCallback current_user_cb;
   gulong              current_cancellable_id;
+  GSource            *current_wait_source;
   GSource            *current_idle_cancel_source;
   GSource            *current_task_idle_return_source;
 

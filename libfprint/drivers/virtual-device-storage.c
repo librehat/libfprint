@@ -169,6 +169,8 @@ dev_delete (FpDevice *dev)
   FpPrint *print = NULL;
   const char *id = NULL;
 
+  g_debug ("Starting deletion");
+
   process_cmds (vdev, FALSE, &error);
   if (should_wait_for_command (vdev, error))
     return;
@@ -195,6 +197,7 @@ dev_delete (FpDevice *dev)
           id,
           fp_print_get_username (print));
 
+  g_debug ("Completing deletion");
   if (g_hash_table_remove (vdev->prints_storage, id))
     fpi_device_delete_complete (dev, NULL);
   else

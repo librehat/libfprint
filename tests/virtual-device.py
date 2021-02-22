@@ -771,7 +771,70 @@ class VirtualDevice(VirtualDeviceBase):
         self.wait_timeout(300)
 
         self.assertFalse(self._verify_completed)
-        self.cancel_verify()
+
+        with GLibErrorMessage('libfprint-device',
+            GLib.LogLevelFlags.LEVEL_WARNING, '*not been completed within the maximum*'):
+            self.cancel_verify()
+
+        # Since we don't really cancel here, next command will be passed to release
+        self._close_on_teardown = False
+        with GLibErrorMessage('libfprint-virtual_device',
+            GLib.LogLevelFlags.LEVEL_WARNING, 'Could not process command: SCAN *'):
+            self.dev.close_sync()
+
+    def test_device_cancel_slow_opening(self):
+        self.set_keep_alive(True)
+        self._close_on_teardown = False
+        self.dev.close_sync()
+        self.assertFalse(self.dev.is_open())
+        self.send_sleep(15000)  # consumed by open
+        with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+                              '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, cancelling it!'):
+            with self.assertRaises(GLib.Error) as error:
+                self.dev.open_sync()
+        self.assertTrue(error.exception.matches(FPrint.DeviceError.quark(),
+                                                FPrint.DeviceError.BUSY))
+
+    def test_device_cancel_slow_opening_with_cancellable(self):
+        self.set_keep_alive(True)
+        self.dev.close_sync(cancellable=Gio.Cancellable())
+        self.assertFalse(self.dev.is_open())
+        self.send_sleep(15000)  # consumed by open
+        with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+                              '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, cancelling it!'):
+            self.dev.open_sync()
+
+    def test_device_cancel_slow_opening_hanging_cancel(self):
+        self.set_keep_alive(True)
+        self._close_on_teardown = False
+        self.dev.close_sync()
+        self.assertFalse(self.dev.is_open())
+        self.send_sleep(15000)  # consumed by open
+        self.send_sleep(15000)  # consumed by cancel
+        with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+                              '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, cancelling it!'):
+            with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+                                  '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, stopping it!'):
+                with self.assertRaises(GLib.Error) as error:
+                    self.dev.open_sync()
+        self.assertTrue(error.exception.matches(FPrint.DeviceError.quark(),
+                                                FPrint.DeviceError.BUSY))
+
+    def test_device_cancel_slow_opening(self):
+        self.set_keep_alive(True)
+        self._close_on_teardown = False
+        self.dev.close_sync()
+        self.assertFalse(self.dev.is_open())
+        self.send_sleep(15000) # consumed by open
+        self.send_sleep(15000) # consumed by cancel
+        with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+            '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, cancelling it!'):
+            with GLibErrorMessage('libfprint-device', GLib.LogLevelFlags.LEVEL_WARNING,
+                '*Action FPI_DEVICE_ACTION_OPEN has not been completed within the maximum allowed time, stopping it!'):
+                with self.assertRaises(GLib.Error) as error:
+                    self.dev.open_sync()
+        self.assertTrue(error.exception.matches(FPrint.DeviceError.quark(),
+                                                FPrint.DeviceError.BUSY))
 
         # Since we don't really cancel here, next command will be passed to release
         self._close_on_teardown = False

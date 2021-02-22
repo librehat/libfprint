@@ -18,6 +18,8 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
+#include "fp-device.h"
+#include "fpi-device.h"
 #define FP_COMPONENT "device"
 #include "fpi-log.h"
 
@@ -77,6 +79,40 @@ G_DEFINE_QUARK (fp - device - retry - quark, fp_device_retry)
  **/
 G_DEFINE_QUARK (fp - device - error - quark, fp_device_error)
 
+static void
+device_action_timeout (FpDevice *device,
+                       gpointer data)
+{
+  FpDevicePrivate *priv = fp_device_get_instance_private (device);
+  FpDeviceClass *cls = FP_DEVICE_GET_CLASS (device);
+  g_autofree char *action_str = NULL;
+  gboolean can_cancel = cls->cancel && !GPOINTER_TO_UINT (data);
+
+  priv->current_wait_source = NULL;
+
+  /* FIXME: */
+  if (priv->current_action == FPI_DEVICE_ACTION_NONE)
+    return;
+
+  action_str = g_enum_to_string (FPI_TYPE_DEVICE_ACTION, priv->current_action);
+  g_warning ("Eek, eek! Action %s has not been completed within the maximum "
+             "allowed time, %s!", action_str,
+             can_cancel ? "cancelling it" : "stopping it");
+
+  if (can_cancel && fpi_device_get_cancellable (device))
+    g_cancellable_cancel (fpi_device_get_cancellable (device));
+  else if (can_cancel)
+    {
+      priv->current_wait_source = fpi_device_add_timeout (device, 3000,
+        device_action_timeout, GUINT_TO_POINTER (TRUE), NULL);
+      cls->cancel (device);
+    }
+  else
+    fpi_device_action_error (device,
+                             fpi_device_error_new_msg (FP_DEVICE_ERROR_BUSY,
+                             "Device operation can't be closed in time"));
+}
+
 static gboolean
 fp_device_cancel_in_idle_cb (gpointer user_data)
 {
@@ -90,6 +126,10 @@ fp_device_cancel_in_idle_cb (gpointer user_data)
   g_debug ("Idle cancelling on ongoing operation!");
 
   priv->current_idle_cancel_source = NULL;
+
+  g_clear_pointer (&priv->current_wait_source, g_source_destroy);
+  priv->current_wait_source = fpi_device_add_timeout (self, 3000,
+    device_action_timeout, GUINT_TO_POINTER (TRUE), NULL);
 
   cls->cancel (self);
 
@@ -683,8 +723,11 @@ fp_device_open (FpDevice           *device,
 
   priv->current_action = FPI_DEVICE_ACTION_OPEN;
   priv->current_task = g_steal_pointer (&task);
+  priv->current_wait_source = fpi_device_add_timeout (device, 3000,
+    device_action_timeout, NULL, NULL);
   maybe_cancel_on_cancelled (device, cancellable);
   fpi_device_report_finger_status (device, FP_FINGER_STATUS_NONE);
+
 
   FP_DEVICE_GET_CLASS (device)->open (device);
 }
@@ -748,6 +791,8 @@ fp_device_close (FpDevice           *device,
 
   priv->current_action = FPI_DEVICE_ACTION_CLOSE;
   priv->current_task = g_steal_pointer (&task);
+  priv->current_wait_source = fpi_device_add_timeout (device, 1000,
+    device_action_timeout, NULL, NULL);
   maybe_cancel_on_cancelled (device, cancellable);
 
   FP_DEVICE_GET_CLASS (device)->close (device);

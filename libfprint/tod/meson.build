@@ -42,12 +42,12 @@ libfprint_tod = library(versioned_libname.split('lib')[1] + '-tod',
     dependencies: deps,
     install: true)
 
-deps += declare_dependency(
+tod_dep = declare_dependency(
     link_with: [
         libfprint_tod,
         libfprint_tod_private,
-    ]
-)
+    ])
+deps += tod_dep
 
 pkgconfig = import('pkgconfig')
 pkgconfig.generate(libfprint_tod,

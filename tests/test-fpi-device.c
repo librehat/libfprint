@@ -507,6 +507,12 @@ test_driver_get_driver_data (void)
 }
 
 static void
+test_driver_initial_features (void)
+{
+  
+}
+
+static void
 on_driver_probe_async (GObject *initable, GAsyncResult *res, gpointer user_data)
 {
   g_autoptr(GError) error = NULL;
@@ -1004,7 +1010,7 @@ test_driver_verify_not_supported (void)
   FpiDeviceFake *fake_dev;
   gboolean match;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_VERIFY;
+  dev_class->features &= ~FP_DEVICE_FEATURE_VERIFY;
 
   device = auto_close_fake_device_new ();
   fake_dev = FPI_DEVICE_FAKE (device);
@@ -1344,7 +1350,7 @@ test_driver_do_not_support_identify (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_IDENTIFY;
+  dev_class->features &= ~FP_DEVICE_FEATURE_IDENTIFY;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_false (fp_device_supports_identify (device));
@@ -1672,7 +1678,7 @@ test_driver_supports_capture (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->features |= FPI_DEVICE_FEATURE_CAPTURE;
+  dev_class->features |= FP_DEVICE_FEATURE_CAPTURE;
   dev_class->capture = fake_device_stub_capture;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
@@ -1685,7 +1691,7 @@ test_driver_do_not_support_capture (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_CAPTURE;
+  dev_class->features &= ~FP_DEVICE_FEATURE_CAPTURE;
   dev_class->capture = NULL;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
@@ -1721,7 +1727,7 @@ test_driver_capture_not_supported (void)
   gboolean wait_for_finger = TRUE;
   FpiDeviceFake *fake_dev;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_CAPTURE;
+  dev_class->features &= ~FP_DEVICE_FEATURE_CAPTURE;
 
   device = auto_close_fake_device_new ();
   fake_dev = FPI_DEVICE_FAKE (device);
@@ -1764,7 +1770,7 @@ test_driver_has_storage (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->features |= FPI_DEVICE_FEATURE_STORAGE;
+  dev_class->features |= FP_DEVICE_FEATURE_STORAGE;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_true (fp_device_has_storage (device));
@@ -1776,7 +1782,7 @@ test_driver_has_not_storage (void)
   g_autoptr(FpAutoResetClass) dev_class = auto_reset_device_class ();
   g_autoptr(FpDevice) device = NULL;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_STORAGE;
+  dev_class->features &= ~FP_DEVICE_FEATURE_STORAGE;
 
   device = g_object_new (FPI_TYPE_DEVICE_FAKE, NULL);
   g_assert_false (fp_device_has_storage (device));
@@ -1828,7 +1834,7 @@ test_driver_list_no_storage (void)
   g_autoptr(GPtrArray) prints = NULL;
   g_autoptr(GError) error = NULL;
 
-  dev_class->features &= ~FPI_DEVICE_FEATURE_STORAGE;
+  dev_class->features &= ~FP_DEVICE_FEATURE_STORAGE;
 
   device = auto_close_fake_device_new ();
   g_assert_false (fp_device_has_storage (device));
@@ -2497,6 +2503,7 @@ main (int argc, char *argv[])
   g_test_add_func ("/driver/get_usb_device", test_driver_get_usb_device);
   g_test_add_func ("/driver/get_virtual_env", test_driver_get_virtual_env);
   g_test_add_func ("/driver/get_driver_data", test_driver_get_driver_data);
+  g_test_add_func ("/driver/initial_features", test_driver_initial_features);
 
   g_test_add_func ("/driver/probe", test_driver_probe);
   g_test_add_func ("/driver/probe/error", test_driver_probe_error);

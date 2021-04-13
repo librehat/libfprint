@@ -242,11 +242,24 @@ if get_option('tod')
         install: false
     )
 
+    fp_todv1_enums = gnome.mkenums_simple('fp-todv1-enums',
+        source_dir: 'tod-drivers',
+        sources: [
+            'tod-drivers/base-fp-device.h',
+            'tod-drivers/base-fp-print.h',
+            'tod-drivers/base-fpi-device.h',
+            'tod-drivers/base-fpi-image-device.h',
+            'tod-drivers/base-fpi-usb.h',
+        ],
+        install_header: false)
+
     test_utils_tod = static_library('fprint-test-utils-tod',
         sources: [
             'test-utils.c',
             'test-utils-tod.c',
+            fp_todv1_enums,
         ],
+        include_directories: 'tod-drivers',
         dependencies: libfprint_private_dep,
         install: false)
 
@@ -254,6 +267,7 @@ if get_option('tod')
         'fp-context-tod',
         'fp-device-tod',
         'fpi-device',
+        'fp-todv1-types',
     ]
 
     tod_dirs = {

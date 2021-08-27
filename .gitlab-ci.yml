@@ -52,7 +52,8 @@ build:
   artifacts:
     expose_as: "HTML Documentation"
     paths:
-    - _build/doc/html/
+    - _build/doc/html
+    - _build/doc/html/index.html
     expire_in: 1 week
 
 test:
@@ -63,12 +64,15 @@ test:
   script:
     - meson --werror -Ddrivers=all -Db_coverage=true . _build
     - ninja -C _build
-    - meson test -C _build --verbose --no-stdsplit --timeout-multiplier 3
+    - meson test -C _build --print-errorlogs --no-stdsplit --timeout-multiplier 3
     - ninja -C _build coverage
     - cat _build/meson-logs/coverage.txt
   artifacts:
+    expose_as: 'Coverage Report'
+    when: always
     paths:
       - _build/meson-logs
+      - _build/meson-logs/coveragereport/index.html
     expire_in: 1 week
   coverage: '/^TOTAL.*\s+(\d+\%)$/'
 
@@ -80,7 +84,15 @@ test_valgrind:
   script:
     - meson -Ddrivers=all . _build
     - ninja -C _build
-    - meson test -C _build --verbose --no-stdsplit --setup=valgrind
+    - meson test -C _build --print-errorlogs --no-stdsplit --setup=valgrind
+  artifacts:
+    expose_as: 'Valgrind test logs'
+    when: always
+    paths:
+      - _build/meson-logs
+      - _build/meson-logs/testlog-valgrind.txt
+    expire_in: 1 week
+
 
 test_scan_build:
   stage: test
@@ -90,10 +102,8 @@ test_scan_build:
   allow_failure: true
   script:
     - meson -Ddrivers=all . _build
-    # This is ugly, the wrapper disables the malloc checker
+    # Wrapper to add --status-bugs and disable malloc checker
     - SCANBUILD=$CI_PROJECT_DIR/.gitlab-ci/scan-build ninja -C _build scan-build
-    # Check that the directory is empty
-    - "! ls -A _build/meson-logs/scanbuild | grep -q ."
   artifacts:
     paths:
       - _build/meson-logs
@@ -150,4 +160,13 @@ container_fedora_build:
   variables:
     GIT_STRATEGY: none # no need to pull the whole tree for rebuilding the image
     # a list of packages to install
-    FDO_DISTRIBUTION_PACKAGES: $LIBFPRINT_DEPENDENCIES
+    FDO_DISTRIBUTION_PACKAGES:
+      $LIBFPRINT_DEPENDENCIES
+      vala
+      libpcap-devel
+      libudev-devel
+    FDO_DISTRIBUTION_EXEC: |
+      git clone https://github.com/martinpitt/umockdev.git && \
+        cd umockdev && \
+        meson _build --prefix=/usr && \
+        ninja -C _build && ninja -C _build install

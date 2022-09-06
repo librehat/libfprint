@@ -63,7 +63,7 @@ test:
     variables:
       - $CI_PIPELINE_SOURCE == "schedule"
   script:
-    - meson --werror -Ddrivers=all -Db_coverage=true . _build
+    - meson --werror -Ddrivers=all -Db_coverage=true -Dsdcp_virt_binary=/usr/local/bin/sdcp_virt_device . _build
     - ninja -C _build
     - meson test -C _build --print-errorlogs --no-stdsplit --timeout-multiplier 3
     - ninja -C _build coverage
@@ -85,7 +85,7 @@ test_valgrind:
     variables:
       - $CI_PIPELINE_SOURCE == "schedule"
   script:
-    - meson -Ddrivers=all . _build
+    - meson -Ddrivers=all -Dsdcp_virt_binary=/usr/local/bin/sdcp_virt_device . _build
     - ninja -C _build
     - meson test -C _build --print-errorlogs --no-stdsplit --setup=valgrind
   artifacts:
@@ -172,8 +172,20 @@ container_fedora_build:
       vala
       libpcap-devel
       libudev-devel
+      mbedtls-devel
     FDO_DISTRIBUTION_EXEC: |
       git clone https://github.com/martinpitt/umockdev.git && \
         cd umockdev && \
         meson _build --prefix=/usr && \
         ninja -C _build && ninja -C _build install
+      cd /tmp
+      mkdir -p /usr/local/bin
+      git clone https://github.com/benzea/SecureDeviceConnectionProtocol.git
+      # Don't bother with cmake
+      gcc -l mbedcrypto -I SecureDeviceConnectionProtocol/src/include \
+        SecureDeviceConnectionProtocol/src/test/virt_device.c \
+        SecureDeviceConnectionProtocol/src/client/client.c \
+        SecureDeviceConnectionProtocol/src/test/helpers.c \
+        SecureDeviceConnectionProtocol/src/test/testkeys.c \
+        -o /usr/local/bin/sdcp_virt_device
+      rm -rf SecureDeviceConnectionProtocol

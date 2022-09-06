@@ -97,8 +97,8 @@ virtual_drivers = [
     'virtual_image',
     'virtual_device',
     'virtual_device_storage',
+    'virtual_sdcp',
 ]
-
 default_drivers = [
     'upektc_img',
     'vfs5011',
@@ -160,6 +160,7 @@ driver_helper_mapping = {
     'virtual_image'          : [ 'virtual' ],
     'virtual_device'         : [ 'virtual' ],
     'virtual_device_storage' : [ 'virtual' ],
+    'virtual_sdcp'           : [ 'sdcp' ],
 }
 
 driver_helpers = []
@@ -216,6 +217,13 @@ foreach i : driver_helpers
         nss_dep = dependency('nss', required: false)
         if not nss_dep.found()
             error('nss is required for @0@ and possibly others'.format(driver))
+        endif
+
+        optional_deps += nss_dep
+    elif i == 'sdcp'
+        nss_dep = dependency('nss', version: '>=3.55', required: false)
+        if not nss_dep.found()
+            error('nss >=3.55 is required for SDCP support (@0@ and possibly others)'.format(driver))
         endif
 
         optional_deps += nss_dep

@@ -135,6 +135,8 @@ driver_sources = {
         [ 'drivers/virtual-device.c' ],
     'virtual_device_storage' :
         [ 'drivers/virtual-device-storage.c' ],
+    'virtual_sdcp' :
+        [ 'drivers/virtual-sdcp.c' ],
     'synaptics' :
         [ 'drivers/synaptics/synaptics.c', 'drivers/synaptics/bmkt_message.c' ],
     'goodixmoc' :
@@ -142,6 +144,8 @@ driver_sources = {
 }
 
 helper_sources = {
+    'sdcp' :
+        [ 'fp-sdcp-device.c', 'fpi-sdcp-device.c' ],
     'aeslib' :
         [ 'drivers/aeslib.c' ],
     'aesx660' :

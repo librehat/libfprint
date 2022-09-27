@@ -1,0 +1,7 @@
+{
+   ignore_dl_open_leaks
+   Memcheck:Leak
+   fun:malloc
+   ...
+   fun:dlopen*
+}

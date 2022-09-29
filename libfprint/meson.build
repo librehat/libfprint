@@ -141,6 +141,8 @@ driver_sources = {
         [ 'drivers/goodixmoc/goodix.c', 'drivers/goodixmoc/goodix_proto.c' ],
     'fpcmoc' :
         [ 'drivers/fpcmoc/fpc.c' ],
+    'fpcmoh' :
+        [ 'drivers/fpcmoh/fpc.c'],
 }
 
 helper_sources = {
@@ -153,6 +155,8 @@ helper_sources = {
     'nss' :
         [ ],
     'udev' :
+        [ ],
+    'fpcbep' :
         [ ],
     'virtual' :
         [ 'drivers/virtual-device-listener.c' ],

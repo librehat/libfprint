@@ -301,11 +301,16 @@ libfprint_private_dep = declare_dependency(
     ]
 )
 
-udev_hwdb = executable('fprint-list-udev-hwdb',
-    'fprint-list-udev-hwdb.c',
-    dependencies: libfprint_private_dep,
-    link_with: libfprint_drivers,
-    install: false)
+udev_hwdb_cmd = get_option('udev_hwdb_cmd')
+if udev_hwdb_cmd == ''
+    udev_hwdb = executable('fprint-list-udev-hwdb',
+        'fprint-list-udev-hwdb.c',
+        dependencies: libfprint_private_dep,
+        link_with: libfprint_drivers,
+        install: false)
+else
+    udev_hwdb = find_program(udev_hwdb_cmd)
+endif
 
 udev_hwdb_generator = custom_target('udev-hwdb',
     output: 'autosuspend.hwdb',
@@ -315,12 +320,17 @@ udev_hwdb_generator = custom_target('udev-hwdb',
     install: false,
 )
 
+udev_rules_cmd = get_option('udev_rules_cmd')
 if install_udev_rules
-    udev_rules = executable('fprint-list-udev-rules',
-        'fprint-list-udev-rules.c',
-        dependencies: libfprint_private_dep,
-        link_with: libfprint_drivers,
-        install: false)
+    if udev_rules_cmd == ''
+        udev_rules = executable('fprint-list-udev-rules',
+            'fprint-list-udev-rules.c',
+            dependencies: libfprint_private_dep,
+            link_with: libfprint_drivers,
+            install: false)
+    else
+        udev_rules = find_program(udev_rules_cmd)
+    endif
 
     custom_target('udev-rules',
         output: '70-@0@.rules'.format(versioned_libname),

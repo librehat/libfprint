@@ -14,6 +14,10 @@ option('udev_rules_dir',
        description: 'Installation path for udev rules',
        type: 'string',
        value: 'auto')
+option('udev_rules_cmd',
+       description : 'Optional path for native build of fprint-list-udev-rules',
+       type : 'string',
+       value : '')
 option('udev_hwdb',
        description: 'Whether to create a udev hwdb for autosuspend (included in systemd v248 and later)',
        type: 'feature',
@@ -22,6 +26,10 @@ option('udev_hwdb_dir',
        description: 'Installation path for udev hwdb',
        type: 'string',
        value: 'auto')
+option('udev_hwdb_cmd',
+       description : 'Optional path for native build of fprint-list-udev-hwdb',
+       type : 'string',
+       value : '')
 option('gtk-examples',
        description: 'Whether to build GTK+ example applications',
        type: 'boolean',

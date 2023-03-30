@@ -38,3 +38,7 @@ option('doc',
        description: 'Whether to build the API documentation',
        type: 'boolean',
        value: true)
+option('tests',
+       description: 'Whether to build the tests',
+       type: 'boolean',
+       value: true)

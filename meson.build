@@ -309,7 +309,9 @@ if get_option('gtk-examples')
 endif
 
 subdir('data')
-subdir('tests')
+if get_option('tests')
+    subdir('tests')
+endif
 
 pkgconfig = import('pkgconfig')
 pkgconfig.generate(

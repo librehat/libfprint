@@ -102,8 +102,10 @@ remove_device (FpContext *context,
 
   g_return_if_fail (g_ptr_array_find (priv->devices, device, &idx));
 
-  g_signal_emit (context, signals[DEVICE_REMOVED_SIGNAL], 0, device);
+  g_object_ref (device);
   g_ptr_array_remove_index_fast (priv->devices, idx);
+  g_signal_emit (context, signals[DEVICE_REMOVED_SIGNAL], 0, device);
+  g_clear_object (&device);
 }
 
 static void

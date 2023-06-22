@@ -115,6 +115,8 @@ context_device_removed_cb (FpContext *ctx, FpDevice *device, FptContext *tctx)
   /* "device-removed" on context is always after "removed" on device */
   g_assert_cmpint (GPOINTER_TO_INT (tctx->user_data), ==, DEV_REMOVED_CB);
   tctx->user_data = GINT_TO_POINTER (CTX_DEVICE_REMOVED_CB);
+
+  g_assert_false (g_ptr_array_find (fp_context_get_devices (tctx->fp_context), device, NULL));
 }
 
 static void

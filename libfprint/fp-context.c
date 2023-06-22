@@ -148,6 +148,7 @@ remove_device (FpContext *context, FpDevice *device)
 static void
 device_remove_on_notify_open_cb (FpContext *context, GParamSpec *pspec, FpDevice *device)
 {
+  g_signal_handlers_disconnect_by_func (device, device_remove_on_notify_open_cb, context);
   remove_device (context, device);
 }
 

@@ -48,8 +48,6 @@ typedef struct
   GUsbContext  *usb_ctx;
   GCancellable *cancellable;
 
-  GSList       *sources;
-
   gint          pending_devices;
   gboolean      enumerated;
 
@@ -257,8 +255,6 @@ fp_context_finalize (GObject *object)
   g_clear_object (&priv->cancellable);
   g_clear_pointer (&priv->drivers, g_array_unref);
   g_clear_pointer (&priv->devices, g_ptr_array_unref);
-
-  g_slist_free_full (g_steal_pointer (&priv->sources), (GDestroyNotify) g_source_destroy);
 
   if (priv->usb_ctx)
     g_object_run_dispose (G_OBJECT (priv->usb_ctx));

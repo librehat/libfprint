@@ -137,8 +137,6 @@ test_context_remove_device_closed (void)
   g_assert_cmpint (GPOINTER_TO_INT (tctx->user_data), ==, CTX_DEVICE_REMOVED_CB);
 
   g_assert_false (g_ptr_array_find (fp_context_get_devices (tctx->fp_context), device, NULL));
-
-  fpt_teardown_virtual_device_environment ();
 }
 
 static void
@@ -189,8 +187,6 @@ test_context_remove_device_closing (void)
   g_assert_cmpint (GPOINTER_TO_INT (tctx->user_data), ==, CTX_DEVICE_REMOVED_CB);
 
   g_assert_false (g_ptr_array_find (fp_context_get_devices (tctx->fp_context), device, NULL));
-
-  fpt_teardown_virtual_device_environment ();
 }
 
 static void
@@ -228,8 +224,6 @@ test_context_remove_device_open (void)
   g_assert_error (error, FP_DEVICE_ERROR, FP_DEVICE_ERROR_REMOVED);
   g_assert_null (tctx->device);
   g_assert_cmpint (GPOINTER_TO_INT (tctx->user_data), ==, CTX_DEVICE_REMOVED_CB);
-
-  fpt_teardown_virtual_device_environment ();
 }
 
 static void
@@ -282,8 +276,6 @@ test_context_remove_device_opening (void)
 
   g_assert_null (tctx->device);
   g_assert_cmpint (GPOINTER_TO_INT (tctx->user_data), ==, CTX_DEVICE_REMOVED_CB);
-
-  fpt_teardown_virtual_device_environment ();
 }
 
 static void

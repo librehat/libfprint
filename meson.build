@@ -131,6 +131,7 @@ default_drivers = [
     'goodixmoc',
     'nb1010',
     'fpcmoc',
+    'fpcmoh',
 
     # SPI
     'elanspi',
@@ -163,6 +164,7 @@ driver_helper_mapping = {
     'aes4000' : [ 'aeslib', 'aes3k' ],
     'uru4000' : [ 'nss' ],
     'elanspi' : [ 'udev' ],
+    'fpcmoh' :  [ 'fpcbep' ],
     'virtual_image'          : [ 'virtual' ],
     'virtual_device'         : [ 'virtual' ],
     'virtual_device_storage' : [ 'virtual' ],
@@ -236,6 +238,13 @@ foreach i : driver_helpers
         libfprint_conf.set10('HAVE_UDEV', true)
 
         optional_deps += gudev_dep
+    elif i == 'fpcbep'
+        fpcbep_dep = cc.find_library('fpcbep', required: true)
+        if not fpcbep_dep.found()
+            error('fpcbep is required for @0@'.format(driver))
+        endif
+
+        optional_deps += fpcbep_dep
     endif
 endforeach
 

@@ -834,7 +834,7 @@ elanmoc2_list_run_state (FpiSsm *ssm, FpDevice *device)
 
       self->print_index++;
 
-      if (self->print_index < ELANMOC2_MAX_PRINTS)
+      if (self->print_index < MIN (ELANMOC2_MAX_PRINTS, self->enrolled_num))
         {
           fpi_ssm_jump_to_state (ssm, LIST_GET_FINGER_INFO);
         }

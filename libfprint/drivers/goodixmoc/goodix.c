@@ -1067,8 +1067,8 @@ fp_init_reset_device_cb (FpiDeviceGoodixMoc  *self,
 {
   if (error)
     {
-      fp_warn ("Reset failed: %s", error->message);
-      fpi_ssm_mark_failed (self->task_ssm, error);
+      fp_warn ("Reset failed: %s, device may not work properly", error->message);
+      fpi_ssm_jump_to_state (self->task_ssm, FP_INIT_VERSION);
       return;
     }
   if ((resp->result >= GX_FAILED) && (resp->result != GX_ERROR_FINGER_ID_NOEXIST))

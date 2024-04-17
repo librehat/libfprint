@@ -79,6 +79,7 @@ usb:v1C7Ap0571*
 
 # Supported by libfprint driver egismoc
 usb:v1C7Ap0582*
+usb:v1C7Ap0586*
 usb:v1C7Ap0587*
 usb:v1C7Ap05A1*
  ID_AUTOSUSPEND=1

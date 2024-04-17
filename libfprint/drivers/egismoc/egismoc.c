@@ -51,11 +51,7 @@ G_DEFINE_TYPE (FpiDeviceEgisMoc, fpi_device_egismoc, FP_TYPE_DEVICE);
 
 static const FpIdEntry egismoc_id_table[] = {
   { .vid = 0x1c7a, .pid = 0x0582, .driver_data = EGISMOC_DRIVER_CHECK_PREFIX_TYPE1 },
-  /*
-   * 0x0586 is supported in the same way as 0587 per user report, but missing submission of device file to be included
-   *
-   * { .vid = 0x1c7a, .pid = 0x0586, .driver_data = EGISMOC_DRIVER_CHECK_PREFIX_TYPE1 | EGISMOC_DRIVER_MAX_ENROLL_STAGES_20 },
-   */
+  { .vid = 0x1c7a, .pid = 0x0586, .driver_data = EGISMOC_DRIVER_CHECK_PREFIX_TYPE1 | EGISMOC_DRIVER_MAX_ENROLL_STAGES_20 },
   { .vid = 0x1c7a, .pid = 0x0587, .driver_data = EGISMOC_DRIVER_CHECK_PREFIX_TYPE1 | EGISMOC_DRIVER_MAX_ENROLL_STAGES_20 },
   { .vid = 0x1c7a, .pid = 0x05a1, .driver_data = EGISMOC_DRIVER_CHECK_PREFIX_TYPE2 },
   { .vid = 0,      .pid = 0,      .driver_data = 0 }

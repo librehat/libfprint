@@ -53,6 +53,7 @@ drivers_tests = [
     'egis0570',
     'egismoc',
     'egismoc-05a1',
+    'egismoc-0586',
     'egismoc-0587',
     'fpcmoc',
     'realtek',

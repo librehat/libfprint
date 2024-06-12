@@ -70,6 +70,7 @@ ma_protocol_crc16_calc (
   for (i = start; i < data_len; temp++, i++)
     sum += *(temp + start) & 0xff;
   uint16_t sum_s = (sum & 0xffff);
+
   return sum_s;
 }
 
@@ -124,14 +125,14 @@ ma_protocol_build_package (
   ppackage[package_len - 1] = crc & 0xFF;
 
 /* gchar msg[1024] = {0};
-  gchar pack_str[16] = {0};
-  for (int i = 0; i < package_len; i++)
+   gchar pack_str[16] = {0};
+   for (int i = 0; i < package_len; i++)
     {
       sprintf(pack_str, "0x%x ", ppackage[i]);
       strcat(msg, pack_str);
     }
-  fp_dbg("build pack %s", msg);
-*/ 
+   fp_dbg("build pack %s", msg);
+ */
   return g_steal_pointer (&ppackage);
 }
 
@@ -1672,7 +1673,7 @@ mafp_get_startup_result_cb (FpiUsbTransfer *transfer,
   if (transfer->actual_length >= 5)
     {
       fp_dbg ("0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x", transfer->buffer[0], transfer->buffer[1],
-            transfer->buffer[2], transfer->buffer[3], transfer->buffer[4]);
+              transfer->buffer[2], transfer->buffer[3], transfer->buffer[4]);
       if (transfer->buffer[0])
         {
           self->search_id = transfer->buffer[2] * 256 + transfer->buffer[1];

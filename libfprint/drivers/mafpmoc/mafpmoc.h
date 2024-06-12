@@ -188,9 +188,9 @@ typedef enum {
 typedef struct _mafp_handshake
 {
   uint8_t code[2];
- /*uint8_t state;
-   uint8_t desc[16];
-   uint8_t ver[4];*/
+  /*uint8_t state;
+     uint8_t desc[16];
+     uint8_t ver[4];*/
 } mafp_handshake_t, *pmafp_handshake_t;
 
 typedef struct _mafp_search

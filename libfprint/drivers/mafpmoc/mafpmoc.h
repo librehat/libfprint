@@ -15,9 +15,6 @@ G_DECLARE_FINAL_TYPE (FpiDeviceMafpmoc, fpi_device_mafpmoc, FPI, DEVICE_MAFPMOC,
 #define PRINT_CMD 0
 #define PRINT_SSM_DEBUG 0
 
-#define LOGD(format, ...) g_debug ("[%s][%d]" format, __FUNCTION__, __LINE__, ## __VA_ARGS__)
-#define LOGE(format, ...) g_error ("[%s][%d]" format, __FUNCTION__, __LINE__, ## __VA_ARGS__)
-
 #define MAFP_INTERFACE_CLASS G_USB_DEVICE_CLASS_VENDOR_SPECIFIC
 #define MAFP_INTERFACE_SUB_CLASS 0x01
 #define MAFP_INTERFACE_PROTOCOL 0x01
@@ -191,9 +188,9 @@ typedef enum {
 typedef struct _mafp_handshake
 {
   uint8_t code[2];
-  // uint8_t state;
-  // uint8_t desc[16];
-  // uint8_t ver[4];
+ /*uint8_t state;
+   uint8_t desc[16];
+   uint8_t ver[4];*/
 } mafp_handshake_t, *pmafp_handshake_t;
 
 typedef struct _mafp_search

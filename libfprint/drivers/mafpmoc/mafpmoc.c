@@ -123,15 +123,15 @@ ma_protocol_build_package (
   ppackage[package_len - 2] = (crc >> 8) & 0xFF;
   ppackage[package_len - 1] = crc & 0xFF;
 
-  // gchar msg[1024] = {0};
-  // gchar pack_str[16] = {0};
-  // for (int i = 0; i < package_len; i++)
-  //   {
-  //     sprintf(pack_str, "0x%x ", ppackage[i]);
-  //     strcat(msg, pack_str);
-  //   }
-  // LOGD("build pack %s", msg);
-
+/* gchar msg[1024] = {0};
+  gchar pack_str[16] = {0};
+  for (int i = 0; i < package_len; i++)
+    {
+      sprintf(pack_str, "0x%x ", ppackage[i]);
+      strcat(msg, pack_str);
+    }
+  fp_dbg("build pack %s", msg);
+*/ 
   return g_steal_pointer (&ppackage);
 }
 
@@ -224,9 +224,9 @@ mafp_clean_usb_bulk_in (FpDevice *device)
   fpi_usb_transfer_fill_bulk (transfer, MAFP_EP_BULK_IN, MAFP_USB_BUFFER_SIZE);
   GError *error = NULL;
 
-  LOGD ("bulk clean");
+  fp_dbg ("bulk clean");
   if (!fpi_usb_transfer_submit_sync (transfer, 200, &error))
-    LOGD ("bulk transfer out fail, %s", error->message);
+    fp_dbg ("bulk transfer out fail, %s", error->message);
 }
 
 static G_GNUC_PRINTF (4, 5) void
@@ -268,7 +268,7 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      LOGD ("error: %d", error->code);
+      fp_dbg ("error: %d", error->code);
       if (data->cmd_force_pass) //ex: G_USB_DEVICE_ERROR_TIMED_OUT
         {
           if (data->callback)
@@ -281,13 +281,13 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
     }
   if (data == NULL)
     {
-      LOGD ("data null");
+      fp_dbg ("data null");
       mafp_mark_failed (device, transfer->ssm, FP_DEVICE_ERROR_PROTO, "resp data null");
       return;
     }
   ssm_state = fpi_ssm_get_cur_state (transfer->ssm);
 
-  //LOGD("actual_length: %d", transfer->actual_length);
+  //fp_dbg("actual_length: %d", transfer->actual_length);
 
   /* skip zero length package */
   if (transfer->actual_length == 0)
@@ -318,9 +318,9 @@ fp_cmd_receive_cb (FpiUsbTransfer *transfer,
     {
       for (int i = 0; i < PACKAGE_HEADER_SIZE + data->cmd_actual_len && i < 1024; i++)
         sprintf (msg + i * 3, "%02X ", data->recv_buffer[i]);
-      LOGD ("RECV: %s", msg);
+      fp_dbg ("RECV: %s", msg);
     }
-  // LOGD("cmd_request_len: %d, cmd_actual_len: %d", data->cmd_request_len, data->cmd_actual_len);
+  // fp_dbg("cmd_request_len: %d, cmd_actual_len: %d", data->cmd_request_len, data->cmd_actual_len);
 
   if (data->cmd_request_len <= data->cmd_actual_len)
     {
@@ -370,7 +370,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
             {
               for (int i = 0; i < data->cmd_transfer->length && i < 1024; i++)
                 sprintf (msg + i * 3, "%02X ", data->cmd_transfer->buffer[i]);
-              LOGD ("SEND: %s", msg);
+              fp_dbg ("SEND: %s", msg);
             }
           fpi_usb_transfer_submit (g_steal_pointer (&data->cmd_transfer),
                                    CMD_TIMEOUT, NULL, fpi_ssm_usb_transfer_cb, NULL);
@@ -393,7 +393,7 @@ fp_cmd_run_state (FpiSsm   *ssm,
       break;
 
     case FP_DATA_RECEIVE:
-      LOGD ("req: %d, act: %d", data->cmd_request_len, data->cmd_actual_len);
+      fp_dbg ("req: %d, act: %d", data->cmd_request_len, data->cmd_actual_len);
       int req_len = MAFP_USB_BUFFER_SIZE;
       if (data->cmd_request_len > 0 && data->cmd_actual_len > 0 && (data->cmd_request_len > data->cmd_actual_len))
         req_len = data->cmd_request_len - data->cmd_actual_len;
@@ -541,7 +541,7 @@ mafp_print_from_template (FpiDeviceMafpmoc *self, mafp_template_t template)
 
   serial_num_len = strlen (self->serial_number);
   dev_sn = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, self->serial_number, serial_num_len, 1);
-  LOGD ("print: %d/%s/%s", template.id, template.uid, self->serial_number);
+  fp_dbg ("print: %d/%s/%s", template.id, template.uid, self->serial_number);
 
   data = g_variant_new ("(q@ay@ay)", template.id, uid, dev_sn);
 
@@ -573,8 +573,8 @@ mafp_load_enrolled_ids (FpiDeviceMafpmoc *self, mafp_cmd_response_t *resp)
     }
   self->templates->index = 0;
   self->templates->total_num = num;
-  LOGD ("enrolled ids: %s", msg);
-  LOGD ("enrolled num: %d", self->templates->total_num);
+  fp_dbg ("enrolled ids: %s", msg);
+  fp_dbg ("enrolled num: %d", self->templates->total_num);
 }
 
 static void
@@ -586,11 +586,11 @@ fp_init_handeshake_cb (FpiDeviceMafpmoc    *self,
 
   if (error)
     {
-      LOGD ("handshake fail");
+      fp_dbg ("handshake fail");
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS &&
       resp->handshake.code[0] == MAFP_HANDSHAKE_CODE1 &&
@@ -600,7 +600,7 @@ fp_init_handeshake_cb (FpiDeviceMafpmoc    *self,
       gchar * value = getenv (MAFP_ENV_ENROLL_SAMPLES);
       if (value)
         self->max_enroll_stage = g_ascii_strtoll (value, NULL, 10);
-      LOGD ("max_enroll_stage: %d", self->max_enroll_stage);
+      fp_dbg ("max_enroll_stage: %d", self->max_enroll_stage);
       fpi_device_set_nr_enroll_stages (dev, self->max_enroll_stage);
 
       fpi_ssm_next_state (self->task_ssm);
@@ -620,10 +620,10 @@ fp_init_module_status_cb (FpiDeviceMafpmoc    *self,
   if (error)
     resp->result = 0xff;
 
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if ((resp->result & MAFP_RE_CALIBRATE_ERROR) == MAFP_RE_CALIBRATE_ERROR)
-    LOGD ("no calibrate data");
+    fp_dbg ("no calibrate data");
 
   fpi_ssm_next_state (self->task_ssm);
 }
@@ -694,7 +694,7 @@ fp_init_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (error)
     {
-      LOGD ("%d %s", error->code, error->message);
+      fp_dbg ("%d %s", error->code, error->message);
       fpi_device_open_complete (dev, error);
       return;
     }
@@ -714,7 +714,7 @@ fp_enroll_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -755,7 +755,7 @@ fp_enroll_read_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   guint8 *resp_buff = (guint8 *) resp;
   guint16 max_id = 0;
@@ -763,7 +763,7 @@ fp_enroll_read_tpl_cb (FpiDeviceMafpmoc    *self,
   if (resp->result == MAFP_SUCCESS)
     {
       max_id = resp_buff[1] * 256 + resp_buff[2];
-      LOGD ("max_id: %d, %x %x %x %x", max_id, resp_buff[0], resp_buff[1], resp_buff[2], resp_buff[3]);
+      fp_dbg ("max_id: %d, %x %x %x %x", max_id, resp_buff[0], resp_buff[1], resp_buff[2], resp_buff[3]);
       if (self->enroll_id >= max_id)
         {
           mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_DATA_FULL,
@@ -798,10 +798,10 @@ fp_enroll_get_image_cb (FpiDeviceMafpmoc    *self,
 
   FpEnrollState nextState = FP_ENROLL_VERIFY_GET_IMAGE;
 
-  //LOGD("result: %d, press_state: %d", resp->result, self->press_state);
+  //fp_dbg("result: %d, press_state: %d", resp->result, self->press_state);
   if (self->press_state == MAFP_PRESS_WAIT_DOWN)
     {
-      LOGD ("wait finger down state %d", resp->result);
+      fp_dbg ("wait finger down state %d", resp->result);
       if (resp->result == MAFP_RE_GET_IMAGE_SUCCESS)
         {
           nextState = FP_ENROLL_VERIFY_GENERATE_FEATURE;
@@ -809,7 +809,7 @@ fp_enroll_get_image_cb (FpiDeviceMafpmoc    *self,
       else if (resp->result == MAFP_RE_GET_IMAGE_NONE)
         {
           self->capture_cnt++;
-          LOGD ("capture_cnt %d", self->capture_cnt);
+          fp_dbg ("capture_cnt %d", self->capture_cnt);
           if (self->capture_cnt > MAFP_IMAGE_ERR_TRRIGER)
             nextState = FP_ENROLL_REFRESH_INT_PARA;
           else
@@ -818,7 +818,7 @@ fp_enroll_get_image_cb (FpiDeviceMafpmoc    *self,
     }
   else if (self->press_state == MAFP_PRESS_WAIT_UP)
     {
-      LOGD ("wait finger up state %d", resp->result);
+      fp_dbg ("wait finger up state %d", resp->result);
       if (resp->result == MAFP_RE_GET_IMAGE_SUCCESS)
         {
           nextState = FP_ENROLL_VERIFY_GET_IMAGE;
@@ -843,12 +843,12 @@ fp_enroll_verify_search_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
       self->search_id = ((resp->search.id[0] & 0xff) << 8) | (resp->search.id[1] & 0xff);
-      LOGD ("search_id: %d", self->search_id);
+      fp_dbg ("search_id: %d", self->search_id);
       fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_GET_TEMPLATE_INFO);
     }
   else
@@ -875,7 +875,7 @@ fp_enroll_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d, %s", resp->result, resp->tpl_info.uid);
+  fp_dbg ("result: %d, %s", resp->result, resp->tpl_info.uid);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -938,7 +938,7 @@ fp_enroll_gen_feature_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (self->enroll_dupl_area_state == MAFP_ENROLL_DUPLICATE_AREA_DENY)
     {
@@ -963,7 +963,7 @@ fp_enroll_verify_duparea_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
     resp->result = 1;
@@ -982,7 +982,7 @@ fp_enroll_save_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_RE_TPL_NUM_OVERSIZE)
     {
@@ -1019,7 +1019,7 @@ fp_enroll_save_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -1027,12 +1027,12 @@ fp_enroll_save_tpl_cb (FpiDeviceMafpmoc    *self,
 
       user_id = self->enroll_user_id;
       user_id_len = strlen (user_id);
-      LOGD ("user_id(%d): %s", user_id_len, user_id);
+      fp_dbg ("user_id(%d): %s", user_id_len, user_id);
       uid = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, user_id, user_id_len, 1);
 
       serial_num = self->serial_number;
       serial_num_len = strlen (serial_num);
-      LOGD ("dev_sn(%d): %s", serial_num_len, serial_num);
+      fp_dbg ("dev_sn(%d): %s", serial_num_len, serial_num);
       dev_sn = g_variant_new_fixed_array (G_VARIANT_TYPE_BYTE, serial_num, serial_num_len, 1);
 
       data = g_variant_new ("(q@ay@ay)", self->enroll_id, uid, dev_sn);
@@ -1060,7 +1060,7 @@ fp_enroll_del_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
   mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_GENERAL,
                     "Failed to save template, result: 0x%x", resp->result);
 }
@@ -1205,19 +1205,19 @@ fp_enroll_wait_int_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      LOGD ("code %d", error->code);
+      fp_dbg ("code %d", error->code);
       if (error->code == G_USB_DEVICE_ERROR_TIMED_OUT)
         fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_VERIFY_GET_IMAGE);
       else
         fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("actual_length %zd", transfer->actual_length);
+  fp_dbg ("actual_length %zd", transfer->actual_length);
   if (transfer->actual_length == 2)
     {
       if (transfer->buffer[0] == 0x04 && transfer->buffer[1] == 0xe5)
         {
-          LOGD ("int trigger");
+          fp_dbg ("int trigger");
           fpi_ssm_next_state (self->task_ssm);
           return;
         }
@@ -1228,7 +1228,7 @@ fp_enroll_wait_int_cb (FpiUsbTransfer *transfer,
 static void
 fp_enroll_wait_int (FpiDeviceMafpmoc *self)
 {
-  LOGD ("wait interrupt");
+  fp_dbg ("wait interrupt");
   FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (self));
 
   fpi_usb_transfer_fill_interrupt (transfer, MAFP_EP_INT_IN, 2);
@@ -1250,10 +1250,10 @@ load_fp_data (FpDevice *dev)
     {
       if (g_file_test (FPRINT_DATA_PATH, G_FILE_TEST_EXISTS))
         {
-          LOGD ("open dir %s failed", FPRINT_DATA_PATH);
+          fp_dbg ("open dir %s failed", FPRINT_DATA_PATH);
           return 1;
         }
-      LOGD ("dir %s not exsit", FPRINT_DATA_PATH);
+      fp_dbg ("dir %s not exsit", FPRINT_DATA_PATH);
       return 0;
     }
   while (NULL != (filename = g_dir_read_name (dir)))
@@ -1263,7 +1263,7 @@ load_fp_data (FpDevice *dev)
         {
           FpDeviceClass *cls = FP_DEVICE_GET_CLASS (dev);
           g_autofree gchar *module_path = g_strconcat (user_path, "/", cls->id, NULL);
-          LOGD ("found data path: %s", module_path);
+          fp_dbg ("found data path: %s", module_path);
           if (g_file_test (module_path, G_FILE_TEST_IS_DIR))
             {
               fp_exist = true;
@@ -1283,7 +1283,7 @@ fp_empty_cb (FpiDeviceMafpmoc    *self,
              mafp_cmd_response_t *resp,
              GError              *error)
 {
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
   fpi_ssm_next_state (self->task_ssm);
 }
 
@@ -1295,7 +1295,7 @@ mafp_check_empty (FpiDeviceMafpmoc *self)
 
   if (uname (&sysinfo) == -1)
     {
-      LOGD ("sysinfo err");
+      fp_dbg ("sysinfo err");
       fpi_ssm_next_state (self->task_ssm);
       return 0;
     }
@@ -1303,18 +1303,18 @@ mafp_check_empty (FpiDeviceMafpmoc *self)
   GString *version = g_string_new (sysinfo.version);
   gchar *sys_ver = g_string_ascii_down (version)->str;
 
-  LOGD ("check system: %s", g_strrstr (sys_ver, str_ubuntu) ? "ubuntu" : "other");
+  fp_dbg ("check system: %s", g_strrstr (sys_ver, str_ubuntu) ? "ubuntu" : "other");
   gboolean empty = (g_strrstr (sys_ver, str_ubuntu) && !load_fp_data (dev));
 
   g_string_free (version, TRUE);
 
   if (empty)
     {
-      LOGD ("empty fp");
+      fp_dbg ("empty fp");
       mafp_sensor_cmd (self, MOC_CMD_EMPTY, NULL, 0, fp_empty_cb);
       return 1;
     }
-  LOGD ("check fp end");
+  fp_dbg ("check fp end");
   fpi_ssm_next_state (self->task_ssm);
   return 0;
 }
@@ -1373,7 +1373,7 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
       break;
 
     case FP_ENROLL_REFRESH_INT_PARA:
-      LOGD ("refresh param");
+      fp_dbg ("refresh param");
       para[0] = MAFP_SLEEP_INT_REFRESH;
       mafp_sensor_cmd (self, MOC_CMD_SLEEP, para, 1, fp_enroll_int_refresh_cb);
       break;
@@ -1408,7 +1408,7 @@ fp_enroll_sm_run_state (FpiSsm *ssm, FpDevice *device)
       para[0] = (self->enroll_id >> 8) & 0xff;   //fp id high
       para[1] = self->enroll_id & 0xff;          //fp id low
       memcpy (para + 2, self->enroll_user_id, strlen (self->enroll_user_id));
-      LOGD ("user_id: %s", self->enroll_user_id);
+      fp_dbg ("user_id: %s", self->enroll_user_id);
       mafp_sensor_cmd (self, MOC_CMD_SAVE_TEMPLATE_INFO, (const guint8 *) &para, 2 + TEMPLATE_UID_SIZE, fp_enroll_save_tpl_info_cb);
       break;
 
@@ -1439,11 +1439,11 @@ fp_enroll_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (error)
     {
-      LOGD ("enroll done fail");
+      fp_dbg ("enroll done fail");
       fpi_device_enroll_complete (dev, NULL, error);
       return;
     }
-  LOGD ("enroll completed");
+  fp_dbg ("enroll completed");
 
   fpi_device_get_enroll_data (dev, &print);
   fpi_device_enroll_complete (dev, g_object_ref (print), NULL);
@@ -1461,7 +1461,7 @@ fp_verify_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     mafp_load_enrolled_ids (self, resp);
@@ -1485,10 +1485,10 @@ fp_verify_get_image_cb (FpiDeviceMafpmoc    *self,
     }
   FpVerifyState nextState = FP_VERIFY_GET_IMAGE;
 
-  //LOGD("result: %d, press_state: %d", resp->result, self->press_state);
+  //fp_dbg("result: %d, press_state: %d", resp->result, self->press_state);
   if (self->press_state == MAFP_PRESS_WAIT_DOWN)
     {
-      LOGD ("wait finger down state %d", resp->result);
+      fp_dbg ("wait finger down state %d", resp->result);
       if (resp->result == MAFP_RE_GET_IMAGE_SUCCESS)
         {
           nextState = FP_VERIFY_GENERATE_FEATURE;
@@ -1496,7 +1496,7 @@ fp_verify_get_image_cb (FpiDeviceMafpmoc    *self,
       else if (resp->result == MAFP_RE_GET_IMAGE_NONE)
         {
           self->capture_cnt++;
-          LOGD ("self->capture_cnt %d", self->capture_cnt);
+          fp_dbg ("self->capture_cnt %d", self->capture_cnt);
           if (self->capture_cnt > MAFP_IMAGE_ERR_TRRIGER)
             nextState = FP_VERIFY_REFRESH_INT_PARA;
           else
@@ -1505,7 +1505,7 @@ fp_verify_get_image_cb (FpiDeviceMafpmoc    *self,
     }
   else if (self->press_state == MAFP_PRESS_WAIT_UP)
     {
-      LOGD ("wait finger up state %d", resp->result);
+      fp_dbg ("wait finger up state %d", resp->result);
       if (resp->result == MAFP_RE_GET_IMAGE_SUCCESS)
         {
           nextState = FP_VERIFY_GET_IMAGE;
@@ -1531,7 +1531,7 @@ fp_verify_gen_feature_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -1553,7 +1553,7 @@ mafp_scl_ctl_cb (FpiUsbTransfer *transfer,
                  GError         *error)
 {
   if (error)
-    LOGD ("control transfer out fail, %s", error->message);
+    fp_dbg ("control transfer out fail, %s", error->message);
 
   fpi_ssm_jump_to_state (transfer->ssm, FP_VERIFY_EXIT);
 }
@@ -1575,7 +1575,7 @@ fp_verify_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -1632,15 +1632,15 @@ fp_verify_search_step_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
   if (resp->result == MAFP_SUCCESS)
     {
-      LOGD ("identify ok, search_id: %d", self->search_id);
+      fp_dbg ("identify ok, search_id: %d", self->search_id);
       fpi_ssm_jump_to_state (self->task_ssm, FP_VERIFY_GET_TEMPLATE_INFO);
     }
   else
     {
-      LOGD ("identify fail");
+      fp_dbg ("identify fail");
       if (fpi_device_get_current_action (dev) == FPI_DEVICE_ACTION_IDENTIFY)
         {
           fpi_device_get_identify_data (dev, &prints);
@@ -1671,7 +1671,7 @@ mafp_get_startup_result_cb (FpiUsbTransfer *transfer,
     }
   if (transfer->actual_length >= 5)
     {
-      LOGD ("0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x", transfer->buffer[0], transfer->buffer[1],
+      fp_dbg ("0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x", transfer->buffer[0], transfer->buffer[1],
             transfer->buffer[2], transfer->buffer[3], transfer->buffer[4]);
       if (transfer->buffer[0])
         {
@@ -1762,19 +1762,19 @@ fp_verify_wait_int_cb (FpiUsbTransfer *transfer,
 
   if (error)
     {
-      LOGD ("code %d", error->code);
+      fp_dbg ("code %d", error->code);
       if (error->code == G_USB_DEVICE_ERROR_TIMED_OUT)
         fpi_ssm_jump_to_state (self->task_ssm, FP_VERIFY_GET_IMAGE);
       else
         fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("actual_length %zd", transfer->actual_length);
+  fp_dbg ("actual_length %zd", transfer->actual_length);
   if (transfer->actual_length == 2)
     {
       if (transfer->buffer[0] == 0x04 && transfer->buffer[1] == 0xe5)
         {
-          LOGD ("int trigger");
+          fp_dbg ("int trigger");
           fpi_ssm_next_state (self->task_ssm);
           return;
         }
@@ -1785,7 +1785,7 @@ fp_verify_wait_int_cb (FpiUsbTransfer *transfer,
 static void
 fp_verify_wait_int (FpiDeviceMafpmoc *self)
 {
-  LOGD ("wait interrupt");
+  fp_dbg ("wait interrupt");
   FpiUsbTransfer *transfer = fpi_usb_transfer_new (FP_DEVICE (self));
 
   fpi_usb_transfer_fill_interrupt (transfer, MAFP_EP_INT_IN, 2);
@@ -1846,7 +1846,7 @@ fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
       break;
 
     case FP_VERIFY_REFRESH_INT_PARA:
-      LOGD ("refresh param");
+      fp_dbg ("refresh param");
       para[0] = MAFP_SLEEP_INT_REFRESH;
       mafp_sensor_cmd (self, MOC_CMD_SLEEP, para, 1, fp_verify_int_refresh_cb);
       break;
@@ -1909,7 +1909,7 @@ fp_verify_sm_run_state (FpiSsm *ssm, FpDevice *device)
 static void
 fp_verify_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 {
-  LOGD ("verify completed");
+  fp_dbg ("verify completed");
   FpiDeviceMafpmoc *self = FPI_DEVICE_MAFPMOC (dev);
 
   if (error && error->domain == FP_DEVICE_RETRY)
@@ -1947,7 +1947,7 @@ fp_list_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_device_list_complete (dev, NULL, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -1979,7 +1979,7 @@ fp_list_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -2027,7 +2027,7 @@ fp_list_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (error)
     {
-      LOGD ("list tpl fail");
+      fp_dbg ("list tpl fail");
       fpi_device_list_complete (dev, NULL, error);
       return;
     }
@@ -2049,7 +2049,7 @@ fp_delete_tpl_table_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
@@ -2086,14 +2086,14 @@ fp_delete_get_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result == MAFP_SUCCESS)
     {
       fpi_device_get_delete_data (dev, &print);
       mafp_template_t tpl = mafp_template_from_print (print);
-      LOGD ("target: %s/%s", tpl.uid, tpl.sn);
-      LOGD ("find: %s/%s", resp->tpl_info.uid, self->serial_number);
+      fp_dbg ("target: %s/%s", tpl.uid, tpl.sn);
+      fp_dbg ("find: %s/%s", resp->tpl_info.uid, self->serial_number);
       if (g_strcmp0 (self->serial_number, tpl.sn) != 0)
         {
           mafp_mark_failed (dev, self->task_ssm, FP_DEVICE_ERROR_GENERAL,
@@ -2127,7 +2127,7 @@ fp_delete_clear_tpl_info_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
     {
@@ -2150,7 +2150,7 @@ fp_delete_tpl_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
     {
@@ -2207,11 +2207,11 @@ fp_delete_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (error)
     {
-      LOGD ("delete tpl fail");
+      fp_dbg ("delete tpl fail");
       fpi_device_delete_complete (dev, error);
       return;
     }
-  LOGD ("delete tpl success");
+  fp_dbg ("delete tpl success");
   fpi_device_delete_complete (dev, NULL);
   self->task_ssm = NULL;
 }
@@ -2228,7 +2228,7 @@ fp_delete_all_cb (FpiDeviceMafpmoc    *self,
       fpi_ssm_mark_failed (self->task_ssm, error);
       return;
     }
-  LOGD ("result: %d", resp->result);
+  fp_dbg ("result: %d", resp->result);
 
   if (resp->result != MAFP_SUCCESS)
     {
@@ -2259,11 +2259,11 @@ fp_delete_all_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 
   if (error)
     {
-      LOGD ("delete all fail");
+      fp_dbg ("delete all fail");
       fpi_device_clear_storage_complete (dev, error);
       return;
     }
-  LOGD ("delete all success");
+  fp_dbg ("delete all success");
   fpi_device_clear_storage_complete (dev, NULL);
   self->task_ssm = NULL;
 }
@@ -2271,7 +2271,7 @@ fp_delete_all_ssm_done (FpiSsm *ssm, FpDevice *dev, GError *error)
 static void
 mafp_probe (FpDevice *device)
 {
-  LOGD ("mafp_probe");
+  fp_dbg ("mafp_probe");
   GUsbDevice *usb_dev;
   GError *error = NULL;
   FpiDeviceMafpmoc *self = FPI_DEVICE_MAFPMOC (device);
@@ -2288,21 +2288,21 @@ mafp_probe (FpDevice *device)
     }
 
   driver_data = fpi_device_get_driver_data (device);
-  LOGD ("driver_data 0x%zx", driver_data);
-  LOGD ("g_usb_device_reset");
+  fp_dbg ("driver_data 0x%zx", driver_data);
+  fp_dbg ("g_usb_device_reset");
   if (!g_usb_device_reset (usb_dev, &error))
     goto err_close;
 
-  LOGD ("g_usb_device_get_interface");
+  fp_dbg ("g_usb_device_get_interface");
   interface = g_usb_device_get_interface (usb_dev, MAFP_INTERFACE_CLASS,
                                           MAFP_INTERFACE_SUB_CLASS, MAFP_INTERFACE_PROTOCOL, &error);
   if (!interface)
     {
-      LOGD ("interface null");
+      fp_dbg ("interface null");
       goto err_close;
     }
   self->interface_num = g_usb_interface_get_number (interface);
-  LOGD ("interface number %d", self->interface_num);
+  fp_dbg ("interface number %d", self->interface_num);
 
   /* Claim usb interface */
   if (!g_usb_device_claim_interface (usb_dev, self->interface_num, 0, &error))
@@ -2326,7 +2326,7 @@ mafp_probe (FpDevice *device)
 
   self->serial_number = g_new0 (char, DEVICE_SN_SIZE);
   memcpy (self->serial_number, serial, strlen (serial));
-  LOGD ("serial: %s", serial);
+  fp_dbg ("serial: %s", serial);
 
   fpi_device_set_nr_enroll_stages (device, DEFAULT_ENROLL_SAMPLES);
 
@@ -2342,23 +2342,23 @@ err_close:
 static void
 mafp_init (FpDevice *device)
 {
-  LOGD ("mafp_init");
+  fp_dbg ("mafp_init");
   FpiDeviceMafpmoc *self = FPI_DEVICE_MAFPMOC (device);
   GError *error = NULL;
   guint64 driver_data;
 
   driver_data = fpi_device_get_driver_data (device);
-  LOGD ("driver_data 0x%zx", driver_data);
-  LOGD ("g_usb_device_reset");
+  fp_dbg ("driver_data 0x%zx", driver_data);
+  fp_dbg ("g_usb_device_reset");
   if (!g_usb_device_reset (fpi_device_get_usb_device (device), &error))
     {
-      LOGD ("g_usb_device_reset err: %s", error->message);
+      fp_dbg ("g_usb_device_reset err: %s", error->message);
       fpi_device_open_complete (FP_DEVICE (self), error);
       return;
     }
 
   /* Claim usb interface */
-  LOGD ("g_usb_device_claim_interface");
+  fp_dbg ("g_usb_device_claim_interface");
   if (!g_usb_device_claim_interface (fpi_device_get_usb_device (device), 0, 0, &error))
     {
       fpi_device_open_complete (FP_DEVICE (self), error);
@@ -2366,9 +2366,9 @@ mafp_init (FpDevice *device)
     }
 
   if (fp_device_has_feature (device, FP_DEVICE_FEATURE_STORAGE))
-    LOGD ("device has storage");
+    fp_dbg ("device has storage");
   else
-    LOGD ("device no storage");
+    fp_dbg ("device no storage");
 
   self->templates = g_new0 (mafp_templates_t, 1);
   self->task_ssm = fpi_ssm_new (device, fp_init_run_state, FP_INIT_STATES);
@@ -2459,7 +2459,7 @@ mafp_template_delete_all (FpDevice *device)
 static void
 mafp_cancel (FpDevice *device)
 {
-  LOGD ("mafp_cancel");
+  fp_dbg ("mafp_cancel");
 }
 
 static void
@@ -2483,7 +2483,7 @@ mafp_release_interface (FpiDeviceMafpmoc *self,
 static void
 mafp_exit (FpDevice *device)
 {
-  LOGD ("mafp_exit");
+  fp_dbg ("mafp_exit");
   FpiDeviceMafpmoc *self = FPI_DEVICE_MAFPMOC (device);
 
   mafp_release_interface (self, NULL);
@@ -2492,7 +2492,7 @@ mafp_exit (FpDevice *device)
 static void
 fpi_device_mafpmoc_init (FpiDeviceMafpmoc *self)
 {
-  LOGD ("fpi_device_mafpmoc_init");
+  fp_dbg ("fpi_device_mafpmoc_init");
 }
 
 static const FpIdEntry id_table[] = {

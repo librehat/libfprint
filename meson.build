@@ -126,6 +126,7 @@ default_drivers = [
     'synaptics',
     'elan',
     'elanmoc',
+    'elanmoc2',
     'uru4000',
     'upektc',
     'upeksonly',

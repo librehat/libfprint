@@ -757,7 +757,10 @@ fpc_enroll_update_cb (FpiDeviceFpcMoc *self,
               fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
               /* Used for customer enrollment scheme */
               if (self->enroll_stage >= (self->max_enroll_stage - self->max_immobile_stage))
-                fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_COMPLETE);
+                {
+                  fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_COMPLETE);
+                  return;
+                }
               break;
             }
         }
@@ -772,7 +775,10 @@ fpc_enroll_update_cb (FpiDeviceFpcMoc *self,
       fpi_device_enroll_progress (FP_DEVICE (self), self->enroll_stage, NULL, NULL);
       /* Used for customer enrollment scheme */
       if (self->enroll_stage >= (self->max_enroll_stage - self->max_immobile_stage))
-        fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_COMPLETE);
+        {
+          fpi_ssm_jump_to_state (self->task_ssm, FP_ENROLL_COMPLETE);
+          return;
+        }
       break;
 
     case FPC_ENROL_STATUS_IMAGE_LOW_COVERAGE:

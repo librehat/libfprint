@@ -200,6 +200,7 @@ usb:v27C6p63AC*
 usb:v27C6p63BC*
 usb:v27C6p63CC*
 usb:v27C6p6496*
+usb:v27C6p650A*
 usb:v27C6p650C*
 usb:v27C6p6582*
 usb:v27C6p6584*
@@ -209,6 +210,7 @@ usb:v27C6p6594*
 usb:v27C6p659A*
 usb:v27C6p659C*
 usb:v27C6p6A94*
+usb:v27C6p6512*
  ID_AUTOSUSPEND=1
  ID_PERSIST=0
 
@@ -356,6 +358,12 @@ usb:v0A5Cp5842*
 usb:v0A5Cp5843*
 usb:v0A5Cp5844*
 usb:v0A5Cp5845*
+usb:v0A5Cp5860*
+usb:v0A5Cp5863*
+usb:v0A5Cp5864*
+usb:v0A5Cp5865*
+usb:v0A5Cp5866*
+usb:v0A5Cp5867*
 usb:v0BDAp5812*
 usb:v10A5p0007*
 usb:v10A5p9200*

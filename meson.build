@@ -135,10 +135,11 @@ default_drivers = [
     'fpcmoc',
     'realtek',
     'focaltech_moc',
-
+] + ((host_machine.system() == 'linux') ? [
     # SPI
+
     'elanspi',
-]
+] : [])
 
 # FIXME: All the drivers should be fixed by adjusting the byte order.
 # See https://gitlab.freedesktop.org/libfprint/libfprint/-/issues/236
